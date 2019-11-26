@@ -1,0 +1,12 @@
+torch
+torchvision
+
+numpy
+scipy
+sklearn
+Pillow
+opencv-python
+
+tqdm
+open3d-python
+shapely
