@@ -2,6 +2,10 @@
 data
 logs
 ckpt
+trained_model
+panoramic_photos
+*.csv
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
