@@ -8,5 +8,5 @@ Pillow
 opencv-python
 
 tqdm
-open3d-python
+open3d-python==3.4.2.16
 shapely

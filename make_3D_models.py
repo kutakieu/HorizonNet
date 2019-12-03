@@ -18,6 +18,7 @@ pretrained_model_path = "./trained_model/resnet50_rnn__st3d.pth"
 
 
 def main(args):
+    print("start")
     save_folder = Path(args.output_dir)
     if not save_folder.exists():
         save_folder.mkdir(parents=True)
@@ -28,15 +29,16 @@ def main(args):
 
     img_dir = Path(args.img_dir)
     img_file_paths = list(img_dir.glob("**/*"))
+    print(img_file_paths)
 
     with torch.no_grad():
         for img_path in img_file_paths:
             # img_path = Path("./9F_3.JPG")
 
-            try:
-                img_orig = preprocess(img_path)
-            except:
-                continue
+            # try:
+            img_orig = preprocess(img_path)
+            # except:
+            #     continue
             if img_orig.size != (1024, 512):
                     img = img_orig.resize((1024, 512), Image.BICUBIC)
             else:
