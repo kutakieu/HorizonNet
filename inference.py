@@ -17,6 +17,8 @@ from model import HorizonNet
 from dataset import visualize_a_data
 from misc import post_proc, panostretch, utils
 
+import matplotlib.pyplot as plt
+
 
 def find_N_peaks(signal, r=29, min_v=0.05, N=None):
     max_v = maximum_filter(signal, size=r, mode='wrap')
@@ -62,7 +64,7 @@ def augment_undo(x_imgs_augmented, aug_type):
     return np.array(x_imgs)
 
 
-def inference(net, x, device, flip=False, rotate=[], visualize=False,
+def inference(net, x, device, flip=False, rotate=[], visualize=True,
               force_cuboid=True, min_v=None, r=0.05):
     '''
     net   : the trained HorizonNet
@@ -76,6 +78,14 @@ def inference(net, x, device, flip=False, rotate=[], visualize=False,
     # Network feedforward (with testing augmentation)
     x, aug_type = augment(x, flip, rotate)
     y_bon_, y_cor_ = net(x.to(device))
+    # print(y_bon_.shape)
+    # print(y_cor_.shape)
+    # plt.plot(np.arange(y_bon_.numpy().shape[-1]), y_bon_.numpy()[0,0,:],color="blue")
+    # plt.plot(np.arange(y_bon_.numpy().shape[-1]), y_bon_.numpy()[0,1,:],color="green")
+    # plt.plot(np.arange(y_bon_.numpy().shape[-1]), y_cor_.numpy()[0,0,:],color="red")
+    # plt.show()
+
+
     y_bon_ = augment_undo(y_bon_.cpu(), aug_type).mean(0)
     y_cor_ = augment_undo(torch.sigmoid(y_cor_).cpu(), aug_type).mean(0)
 

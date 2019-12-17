@@ -12,28 +12,51 @@ from preprocess import preprocess
 from reconstruction.make_3D_model import Cuboid_Model
 from reconstruction.texture_maker import Texture
 
+from write_textures import make_3d_files
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-pretrained_model_path = "./trained_model/resnet50_rnn__st3d.pth"
+pretrained_model_path = "./trained_model/resnet50_rnn__mp3d.pth"
+
+
+"""
+step1: select pretrained_model_path
+step2: set --img_dir as input
+"""
 
 
 def main(args):
-    print("start")
-    save_folder = Path(args.output_dir)
-    if not save_folder.exists():
-        save_folder.mkdir(parents=True)
+    # save_folder = Path(args.save_folder)
+    # if not save_folder.exists():
+    #     save_folder.mkdir(parents=True)
 
     # net = utils.load_trained_model(HorizonNet, args.pth).to(device)
     net = utils.load_trained_model(HorizonNet, pretrained_model_path).to(device)
     net.eval()
 
-    img_dir = Path(args.img_dir)
-    img_file_paths = list(img_dir.glob("**/*"))
-    print(img_file_paths)
+    img_dirs = Path(args.img_dir)
+    img_dirs = list(img_dirs.glob("*"))
 
+    # print(img_file_paths)
     with torch.no_grad():
-        for img_path in img_file_paths:
-            # img_path = Path("./9F_3.JPG")
+        for i, img_dir in enumerate(img_dirs):
+            print(img_dir)
+            # if str(img_dir.stem) != "panel_421865_洋室":
+            #     continue
+            # print("here")
+            img_files = list(img_dir.glob("*.jpg"))
+            img_path = None
+            for img_file in img_files:
+                if "panel" in img_file.stem:
+                    img_path = img_file
+
+            if img_path is None:
+                continue
+
+            # output_dir = save_folder/img_path.stem
+            output_dir = img_dir
+            # if not output_dir.exists():
+            #     output_dir.mkdir(parents=True)
 
             # try:
             img_orig = preprocess(img_path)
@@ -50,45 +73,36 @@ def main(args):
             # Inferenceing corners
             cor_id, z0, z1, vis_out = inference(net, x, device, args.flip, args.rotate, args.visualize, args.force_cuboid, args.min_v, args.r)
 
-            cor_id_pano = np.zeros((cor_id.shape))
-            cor_id_pano[:, 0] = cor_id[:, 0] * img_orig.size[0]
-            cor_id_pano[:, 1] = cor_id[:, 1] * img_orig.size[1]
-
-
-            room_3D_model = Cuboid_Model(cor_id_pano, np.array(img_orig), camera_height=1.6)
-            room_3D_model.make_cuboid()
-            # print(room_3D_model.vertices_3D)
-            room_3D_vertices = np.asarray(room_3D_model.vertices_3D)
-
-            texture_maker = Texture(np.array(img_orig), room_3D_model, cor_id_pano)
-
-            save_folder_path = save_folder / img_path.stem
-            save_folder_path.mkdir(parents=True, exist_ok=True)
-
-            vertical_textures = texture_maker.make_vertical_textures(save_folder_path)
-            horizonatal_textures = texture_maker.new_make_horizonatal_textures(save_folder_path)
-
             if vis_out is not None:
-                vis_path = save_folder_path / (img_path.stem + '_raw.png')
-                print(vis_path)
+                vis_path = output_dir / (img_path.stem + '_raw.png')
+                # print(vis_path)
                 vh, vw = vis_out.shape[:2]
                 Image.fromarray(vis_out)\
                      .resize((vw//2, vh//2), Image.LANCZOS)\
                      .save(vis_path)
+
+            try:
+                make_3d_files(cor_id, img_orig/255.0, output_dir, write_obj_files=True, write_point_cloud=True)
+            except:
+                print("error", img_path)
+                continue
+
+            # input("...")
+            print(i)
 
 
 if __name__ == '__main__':
 
     """options"""
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--pth', default="./trained_model/resnet50_rnn__st3d.pth",
-                        help='path to load saved checkpoint.')
+    # parser.add_argument('--pth', default="./trained_model/resnet50_rnn__st3d.pth",
+    #                     help='path to load saved checkpoint.')
     parser.add_argument('--img_dir', required=True,
                         help='NOTE: Remeber to quote your glob path. '
                              'All the given images are assumed to be aligned'
                              'or you should use preporcess.py to do so.')
-    parser.add_argument('--output_dir', required=True)
-    parser.add_argument('--visualize', action='store_true')
+    # parser.add_argument('--save_folder', required=True)
+    parser.add_argument('--visualize', default=True)
     # Augmentation related
     parser.add_argument('--flip', action='store_true',
                         help='whether to perfome left-right flip. '
@@ -102,8 +116,8 @@ if __name__ == '__main__':
     parser.add_argument('--min_v', default=None, type=float)
     parser.add_argument('--force_cuboid', action='store_true')
     # Misc arguments
-    parser.add_argument('--no_cuda', action='store_true',
-                        help='disable cuda')
+    # parser.add_argument('--no_cuda', action='store_true',
+    #                     help='disable cuda')
     args = parser.parse_args()
 
     main(args)

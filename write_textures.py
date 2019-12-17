@@ -1,7 +1,7 @@
 import json
-from pathlib import Path
 import open3d
 import numpy as np
+from pathlib import Path
 from PIL import Image
 from tqdm import tqdm, trange
 from scipy.ndimage import map_coordinates
@@ -9,6 +9,9 @@ from scipy.ndimage import map_coordinates
 from misc.post_proc import np_coor2xy, np_coory2v
 from misc.panostretch import pano_connect_points
 
+from reconstruction.make_obj_mtl_files import make_obj_file, make_obj_file_horizontal, make_mtl_file
+
+from preprocess import preprocess
 
 def xyz_2_coorxy(xs, ys, zs, H, W):
     ''' Mapping 3D xyz coordinates to equirect coordinate '''
@@ -71,17 +74,23 @@ def warp_walls(equirect_texture, xy, floor_z, ceil_z, ppm):
     H, W = equirect_texture.shape[:2]
     all_rgb = []
     all_xyz = []
-    texture_idxs = {}
-    for i in trange(len(xy), desc='Processing walls'):
+    texture_info = {}
+    # for i in trange(len(xy), desc='Processing walls'):
+    for i in range(len(xy)):
         next_i = (i + 1) % len(xy)
         xy_a = xy[i]
         xy_b = xy[next_i]
         xy_w = np.sqrt(((xy_a - xy_b)**2).sum())
         t_h = int(round((ceil_z - floor_z) * ppm))
         t_w = int(round(xy_w * ppm))
+        # print("t_h :", t_h)
+        # print("t_w :", t_w)
+        if t_w <= 0 or t_w > 1000:
+            return None
         xs = np.linspace(xy_a[0], xy_b[0], t_w)[None].repeat(t_h, 0)
         ys = np.linspace(xy_a[1], xy_b[1], t_w)[None].repeat(t_h, 0)
-        zs = np.linspace(floor_z, ceil_z, t_h)[:, None].repeat(t_w, 1)
+        zs = np.linspace(ceil_z, floor_z, t_h)[:, None].repeat(t_w, 1)
+        # zs = np.linspace(floor_z, ceil_z, t_h)[:, None].repeat(t_w, 1)
         coorx, coory = xyz_2_coorxy(xs, ys, zs, H, W)
 
         plane_texture = np.stack([
@@ -94,15 +103,18 @@ def warp_walls(equirect_texture, xy, floor_z, ceil_z, ppm):
         """ added """
         # wall_texture = Image.fromarray(np.uint8(plane_texture*255))
         # wall_texture.save("wall_{}.png".format(i), "JPEG")
-        texture_idxs["wall_{}".format(i)] = {"start_idx":len(all_rgb), "end_idx":len(all_rgb)+t_h*t_w, "height":t_h, "width":t_w}
+        corner_xyz_coords = np.array([[xy_a[0], xy_a[1], ceil_z], [xy_b[0], xy_b[1], ceil_z], [xy_b[0], xy_b[1], floor_z], [xy_a[0], xy_a[1], floor_z]])
+        texture_info["wall_{}".format(i)] = {"start_idx":len(all_rgb), "end_idx":len(all_rgb)+t_h*t_w, "height":t_h, "width":t_w, "corner_xyz_coords":corner_xyz_coords}
 
         all_rgb.extend(plane_texture.reshape(-1, 3))
         all_xyz.extend(plane_xyz.reshape(-1, 3))
 
-    return all_rgb, all_xyz, texture_idxs
+        # print("plane_texture :", plane_texture.shape)
+
+    return all_rgb, all_xyz, texture_info
 
 
-def warp_floor_ceiling(equirect_texture, ceil_floor_mask, xy, z_floor, z_ceiling, ppm, texture_idxs):
+def warp_floor_ceiling(equirect_texture, ceil_floor_mask, xy, z_floor, z_ceiling, ppm, texture_info):
     ''' Generate floor's and ceiling's xyzrgba '''
     assert equirect_texture.shape[:2] == ceil_floor_mask.shape[:2]
     H, W = equirect_texture.shape[:2]
@@ -125,12 +137,12 @@ def warp_floor_ceiling(equirect_texture, ceil_floor_mask, xy, z_floor, z_ceiling
         map_coordinates(equirect_texture[..., 1], [coory_floor, coorx_floor], order=1, mode='wrap'),
         map_coordinates(equirect_texture[..., 2], [coory_floor, coorx_floor], order=1, mode='wrap'),
     ], -1)
-    print("floor_texture :", floor_texture.shape)
-    start_idx = texture_idxs[list(texture_idxs.keys())[-1]]["end_idx"]
-    texture_idxs["floor"] = {"start_idx":start_idx, "end_idx":start_idx+t_h*t_w, "height":t_h, "width":t_w}
+    # print("floor_texture :", floor_texture.shape)
+    start_idx = texture_info[list(texture_info.keys())[-1]]["end_idx"]
+    texture_info["floor"] = {"start_idx":start_idx, "end_idx":start_idx+t_h*t_w, "height":t_h, "width":t_w}
     floor_mask = map_coordinates(ceil_floor_mask, [coory_floor, coorx_floor], order=0)
-    print("floor_mask :", floor_mask.shape)
-    print(floor_mask.sum())
+    # print("floor_mask :", floor_mask.shape)
+    # print(floor_mask.sum())
     floor_xyz = np.stack([xs, ys, zs_floor], axis=-1)
 
     ceil_texture = np.stack([
@@ -138,11 +150,11 @@ def warp_floor_ceiling(equirect_texture, ceil_floor_mask, xy, z_floor, z_ceiling
         map_coordinates(equirect_texture[..., 1], [coory_ceil, coorx_ceil], order=1, mode='wrap'),
         map_coordinates(equirect_texture[..., 2], [coory_ceil, coorx_ceil], order=1, mode='wrap'),
     ], -1)
-    print("ceil_texture :", ceil_texture.shape)
-    texture_idxs["ceiling"] = {"start_idx":start_idx+t_h*t_w, "end_idx":start_idx+t_h*t_w+t_h*t_w, "height":t_h, "width":t_w}
+    # print("ceil_texture :", ceil_texture.shape)
+    texture_info["ceiling"] = {"start_idx":start_idx+t_h*t_w, "end_idx":start_idx+t_h*t_w+t_h*t_w, "height":t_h, "width":t_w}
     ceil_mask = map_coordinates(ceil_floor_mask, [coory_ceil, coorx_ceil], order=0)
-    print("ceil_mask :", ceil_mask.shape)
-    print(ceil_mask.sum())
+    # print("ceil_mask :", ceil_mask.shape)
+    # print(ceil_mask.sum())
     ceil_xyz = np.stack([xs, ys, zs_ceil], axis=-1)
 
     # floor_texture = floor_texture[floor_mask]
@@ -154,7 +166,7 @@ def warp_floor_ceiling(equirect_texture, ceil_floor_mask, xy, z_floor, z_ceiling
     # return floor_texture, floor_xyz, ceil_texture, ceil_xyz
 
 
-def create_occlusion_mask(xyz):
+def create_occlusion_mask(xyz, H, W):
     xs, ys, zs = xyz.T
     ds = np.sqrt(xs**2 + ys**2 + zs**2)
 
@@ -164,7 +176,6 @@ def create_occlusion_mask(xyz):
 
     # Compute coresponding quirect coordinate
     coorx, coory = xyz_2_coorxy(xs, ys, zs, H=256, W=512)
-    print("herererer", W, H)
     quan_coorx = np.round(coorx).astype(int) % W
     quan_coory = np.round(coory).astype(int) % H
 
@@ -184,6 +195,110 @@ def create_occlusion_mask(xyz):
     mask = ds > (filter_ds + 2 * tol_ds)
 
     return mask, idx
+
+
+def write_textures(all_rgb, texture_info, output_dir, camera_height):
+
+    for k,v in texture_info.items():
+        if k == "ceiling":
+            continue
+
+        current_texture = all_rgb[v["start_idx"] : v["end_idx"]]
+        # print(k, current_texture.shape)
+        current_texture_img = Image.fromarray(np.uint8(current_texture.reshape(v["height"], v["width"], 3)*255))
+        # current_texture_img
+        current_texture_img.save(output_dir / (k + ".jpg"), "JPEG")
+
+        if k == "floor":
+            normal_vector = "vn 0.0000 1.0000 0.0000\n"
+            make_obj_file_horizontal(k, v["corner_xyz_coords"], normal_vector, output_dir)
+        elif "wall" in k:
+            v["corner_xyz_coords"][:, 2] += camera_height
+            normal_vector = np.cross(v["corner_xyz_coords"][1] - v["corner_xyz_coords"][0], v["corner_xyz_coords"][1] - v["corner_xyz_coords"][2])
+            normal_vector /= np.sum(np.sqrt(normal_vector**2))
+            normal_vec4obj_file = "vn " + str(normal_vector[0]) + " " + str(normal_vector[1]) + " " + str(normal_vector[2]) + "\n"
+            make_obj_file(k, v["corner_xyz_coords"], normal_vec4obj_file, output_dir)
+        make_mtl_file(k, output_dir)
+
+
+def write_point_cloud_files(pcd, file_name, output_dir):
+    open3d.io.write_point_cloud(str(output_dir / (file_name + ".pcd")), pcd)
+
+def make_3d_files(cor_id, original_equirect_img, output_dir, ppm=80, camera_height=1.6, ignore_wireframe=False, ignore_floor=False, ignore_ceiling=True, write_obj_files=True, write_point_cloud=True):
+
+    # preprocessed_img = preprocess(original_equirect_img)
+    # print(preprocessed_img.shape)
+    # equirect_texture = preprocessed_img / 255.0
+
+    # equirect_texture = np.array(Image.open(original_equirect_img)) / 255.0
+    equirect_texture = original_equirect_img
+    H, W = equirect_texture.shape[:2]
+    cor_id[:, 0] *= W
+    cor_id[:, 1] *= H
+
+    ceil_floor_mask = create_ceiling_floor_mask(cor_id, H, W)
+
+    # Convert cor_id to 3d xyz
+    N = len(cor_id) // 2
+    floor_z = -camera_height
+    floor_xy = np_coor2xy(cor_id[1::2], floor_z, W, H, floorW=1, floorH=1)
+    c = np.sqrt((floor_xy**2).sum(1))
+    v = np_coory2v(cor_id[0::2, 1], H)
+    ceil_z = (c * np.tan(v)).mean()
+
+    # Prepare
+    if not ignore_wireframe:
+        assert N == len(floor_xy)
+        wf_points = [[x, y, floor_z] for x, y in floor_xy] +\
+                    [[x, y, ceil_z] for x, y in floor_xy]
+        wf_lines = [[i, (i+1)%N] for i in range(N)] +\
+                   [[i+N, (i+1)%N+N] for i in range(N)] +\
+                   [[i, i+N] for i in range(N)]
+        wf_colors = [[1, 0, 0] for i in range(len(wf_lines))]
+        wf_line_set = open3d.geometry.LineSet()
+        wf_line_set.points = open3d.utility.Vector3dVector(wf_points)
+        wf_line_set.lines = open3d.utility.Vector2iVector(wf_lines)
+        wf_line_set.colors = open3d.utility.Vector3dVector(wf_colors)
+
+    # Warp each wall
+    all_rgb, all_xyz, texture_info = warp_walls(equirect_texture, floor_xy, floor_z, ceil_z, ppm)
+
+    # Warp floor and ceiling
+    if not ignore_floor or not ignore_ceiling:
+        fi, fp, ci, cp = warp_floor_ceiling(equirect_texture, ceil_floor_mask,
+                                            floor_xy, floor_z, ceil_z,
+                                            ppm=ppm, texture_info=texture_info)
+
+        if not ignore_floor:
+            all_rgb.extend(fi)
+            all_xyz.extend(fp)
+
+        if not ignore_ceiling:
+            all_rgb.extend(ci)
+            all_xyz.extend(cp)
+
+    all_xyz = np.array(all_xyz)
+    all_rgb = np.array(all_rgb)
+
+    texture_info["floor"]["corner_xyz_coords"] = np.array([[x, y, floor_z+camera_height] for x, y in floor_xy])
+    texture_info["ceiling"]["corner_xyz_coords"] = np.array([[x, y, ceil_z+camera_height] for x, y in floor_xy])
+
+    if write_obj_files:
+        write_textures(all_rgb, texture_info, output_dir, camera_height)
+
+    # Filter occluded points
+    occlusion_mask, reord_idx = create_occlusion_mask(all_xyz, H, W)
+
+    all_xyz = all_xyz[reord_idx][~occlusion_mask]
+    all_rgb = all_rgb[reord_idx][~occlusion_mask]
+
+    pcd = open3d.PointCloud()
+    pcd.points = open3d.Vector3dVector(all_xyz)
+    pcd.colors = open3d.Vector3dVector(all_rgb)
+
+    if write_point_cloud:
+        write_point_cloud_files(pcd, str(output_dir.name), output_dir)
+
 
 
 if __name__ == '__main__':
@@ -206,7 +321,15 @@ if __name__ == '__main__':
                         help='Skip rendering ceiling')
     parser.add_argument('--ignore_wireframe', action='store_true',
                         help='Skip rendering wireframe')
+    parser.add_argument('--write_obj_files', action='store_true',
+                        help='write obj file')
+    parser.add_argument('--write_point_cloud', action='store_true',
+                        help='write point cloud file')
+    parser.add_argument('--output_dir', type=str, required=True,
+                        help='path to a directory to save 3d files')
+
     args = parser.parse_args()
+
 
     # Reading source (texture img, cor_id txt)
     equirect_texture = np.array(Image.open(args.img)) / 255.0
@@ -216,6 +339,13 @@ if __name__ == '__main__':
     cor_id = np.array(inferenced_result['uv'], np.float32)
     cor_id[:, 0] *= W
     cor_id[:, 1] *= H
+
+
+
+    make_3d_files(cor_id, args.img, args.output_dir, args)
+    exit()
+
+
 
     ceil_floor_mask = create_ceiling_floor_mask(cor_id, H, W)
 
@@ -243,14 +373,14 @@ if __name__ == '__main__':
         wf_line_set.colors = open3d.utility.Vector3dVector(wf_colors)
 
     # Warp each wall
-    all_rgb, all_xyz, texture_idxs = warp_walls(equirect_texture, floor_xy, floor_z, ceil_z, args.ppm)
+    all_rgb, all_xyz, texture_info = warp_walls(equirect_texture, floor_xy, floor_z, ceil_z, args.ppm)
     print("all_xyz.shape : ", all_xyz[0].shape)
 
     # Warp floor and ceiling
     if not args.ignore_floor or not args.ignore_ceiling:
         fi, fp, ci, cp = warp_floor_ceiling(equirect_texture, ceil_floor_mask,
                                             floor_xy, floor_z, ceil_z,
-                                            ppm=args.ppm, texture_idxs=texture_idxs)
+                                            ppm=args.ppm, texture_info=texture_info)
         # print("floor ceiling texture")
         # print(fi.shape)
         # print(fp.shape)
@@ -273,7 +403,7 @@ if __name__ == '__main__':
     occlusion_mask, reord_idx = create_occlusion_mask(all_xyz)
     # all_rgb[occlusion_mask] = np.array([0, 1, 0])
     print(all_rgb.shape)
-    # for k,v in texture_idxs.items():
+    # for k,v in texture_info.items():
     #     current_texture = all_rgb[v["start_idx"] : v["end_idx"]]
     #     current_texture_img = Image.fromarray(np.uint8(current_texture.reshape(v["height"], v["width"], 3)*255))
     #     current_texture_img.save(k + ".jpg", "JPEG")
@@ -294,11 +424,8 @@ if __name__ == '__main__':
     pcd.points = open3d.Vector3dVector(all_xyz)
     pcd.colors = open3d.Vector3dVector(all_rgb)
 
-    open3d.io.write_point_cloud("example.pcd", pcd)
-
     # Visualize result
     tobe_visualize = [pcd]
     if not args.ignore_wireframe:
         tobe_visualize.append(wf_line_set)
-
     open3d.visualization.draw_geometries(tobe_visualize)

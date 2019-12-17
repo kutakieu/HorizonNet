@@ -132,6 +132,8 @@ def make_obj_file_horizontal(material_name, coordinates, normal_vector, save_fol
 
     # fout_obj.write("vt 0.000000 0.000000\nvt 1.000000 0.000000\nvt 1.000000 1.000000\nvt 0.000000 1.000000\n")
     fout_obj.write(normal_vector)
+    normal_vector = "vn 0.0000 -1.0000 0.0000\n"
+    fout_obj.write(normal_vector)
 
     fout_obj.write("usemtl " + material_name + "\n")
     fout_obj.write("s 1\n")
