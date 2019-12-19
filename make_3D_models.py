@@ -82,7 +82,8 @@ def main(args):
                      .save(vis_path)
 
             try:
-                make_3d_files(cor_id, img_orig/255.0, output_dir, write_obj_files=True, write_point_cloud=True)
+                make_3d_files(cor_id, np.array(img_orig)/255.0, output_dir, write_obj_files=True, write_point_cloud=True)
+                # make_3d_files(cor_id, vis_out/255.0, output_dir, write_obj_files=True, write_point_cloud=True)
             except:
                 print("error", img_path)
                 continue

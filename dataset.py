@@ -221,7 +221,12 @@ def visualize_a_data(x, y_bon, y_cor):
     img_bon[y_bon[0], np.arange(len(y_bon[0])), 1] = 255
     img_bon[y_bon[1], np.arange(len(y_bon[1])), 1] = 255
 
-    return np.concatenate([gt_cor, img_pad, img_bon], 0)
+    # print(gt_cor.shape)
+    # print(img_pad.shape)
+    # print(img_bon.shape)
+
+    # return np.concatenate([gt_cor, img_pad, img_bon], 0)
+    return img_bon
 
 
 if __name__ == '__main__':
