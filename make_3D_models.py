@@ -12,7 +12,7 @@ from preprocess import preprocess
 from reconstruction.make_3D_model import Cuboid_Model
 from reconstruction.texture_maker import Texture
 
-from write_textures import make_3d_files
+from write_textures import make_3d_files, make_3D_json_file
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -44,10 +44,10 @@ def main(args):
             # if str(img_dir.stem) != "panel_421865_洋室":
             #     continue
             # print("here")
-            img_files = list(img_dir.glob("*.jpg"))
+            img_files = list(img_dir.glob("*.jpg")) + list(img_dir.glob("*.png"))
             img_path = None
             for img_file in img_files:
-                if "panel" in img_file.stem:
+                if "panel" in img_file.stem and "raw" not in img_file.stem:
                     img_path = img_file
 
             if img_path is None:
@@ -60,6 +60,7 @@ def main(args):
 
             # try:
             img_orig = preprocess(img_path)
+            # img_orig = Image.open(img_path)
             # except:
             #     continue
             if img_orig.size != (1024, 512):
@@ -71,7 +72,11 @@ def main(args):
             x = torch.FloatTensor([img_ori / 255])
 
             # Inferenceing corners
-            cor_id, z0, z1, vis_out = inference(net, x, device, args.flip, args.rotate, args.visualize, args.force_cuboid, args.min_v, args.r)
+            cor_id, z0, z1, vis_out, boundary = inference(net, x, device, args.flip, args.rotate, args.visualize, args.force_cuboid, args.min_v, args.r)
+
+            boundary = ((boundary / np.pi + 0.5) * 512).round().astype(int)
+            # print(boundary[0,511])
+            # print(boundary[1,511])
 
             if vis_out is not None:
                 vis_path = output_dir / (img_path.stem + '_raw.png')
@@ -81,6 +86,8 @@ def main(args):
                      .resize((vw//2, vh//2), Image.LANCZOS)\
                      .save(vis_path)
 
+            make_3D_json_file(cor_id, np.array(img_orig)/255.0, boundary, output_dir, camera_height=1.0)
+
             try:
                 make_3d_files(cor_id, np.array(img_orig)/255.0, output_dir, write_obj_files=True, write_point_cloud=True)
                 # make_3d_files(cor_id, vis_out/255.0, output_dir, write_obj_files=True, write_point_cloud=True)
@@ -89,7 +96,7 @@ def main(args):
                 continue
 
             # input("...")
-            print(i)
+            # print(i)
 
 
 if __name__ == '__main__':

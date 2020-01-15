@@ -142,6 +142,12 @@ def rotatePanorama(img, vp=None, R=None):
     if R is None:
         R = np.linalg.inv(vp.T)
 
+    # print("R :",R)
+    # print("R.shape :",R.shape)
+    # print(np.sqrt(np.sum(R**2, axis=1)))
+    # exit()
+
+
     xyzOld = np.linalg.solve(R, xyzNew.T).T
     uvOld = xyz2uvN(xyzOld, 1)
 

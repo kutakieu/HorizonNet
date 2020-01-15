@@ -3,6 +3,7 @@ from pathlib import Path
 # import matplotlib.pyplot as plt
 
 
+# img_dirs = list(Path("./data/easy/").glob("*"))
 img_dirs = list(Path("./data/pano_img_floor_map_set_mp3d_w_green_line").glob("*"))
 # img_dirs = list(Path("./pano_img_floor_map_set_panos2d3d").glob("*"))
 # img_dirs = list(Path("./pano_img_floor_map_set_st3d").glob("*"))

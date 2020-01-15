@@ -72,6 +72,7 @@ def inference(net, x, device, flip=False, rotate=[], visualize=True,
     flip  : fliping testing augmentation
     rotate: horizontal rotation testing augmentation
     '''
+    print("force_cuboid :", force_cuboid)
 
     H, W = tuple(x.shape[2:])
 
@@ -111,6 +112,9 @@ def inference(net, x, device, flip=False, rotate=[], visualize=True,
     N = 4 if force_cuboid else None
     xs_ = find_N_peaks(y_cor_, r=r, min_v=min_v, N=N)[0]
 
+    dx, rot_rad = post_proc.get_rot_rad(xs_, y_bon_[0])
+    # exit()
+
     # Generate wall-walls
     cor, xy_cor = post_proc.gen_ww(xs_, y_bon_[0], z0, tol=abs(0.16 * z1 / 1.6), force_cuboid=force_cuboid)
     if not force_cuboid:
@@ -140,7 +144,7 @@ def inference(net, x, device, flip=False, rotate=[], visualize=True,
     cor_id[:, 0] /= W
     cor_id[:, 1] /= H
 
-    return cor_id, z0, z1, vis_out
+    return cor_id, z0, z1, vis_out, y_bon_
 
 
 if __name__ == '__main__':

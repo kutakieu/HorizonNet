@@ -75,7 +75,9 @@ def mean_percentile(vec, p1=25, p2=75):
 def vote(vec, tol):
     vec = np.sort(vec)
     n = np.arange(len(vec))[::-1]
+    # print("n.shape :",n.shape)
     n = n[:, None] - n[None, :] + 1.0
+    # print(pdist(vec[:, None], 'minkowski', p=1))
     l = squareform(pdist(vec[:, None], 'minkowski', p=1) + 1e-9)
 
     invalid = (n < len(vec) * 0.4) | (l > tol)
@@ -91,6 +93,7 @@ def vote(vec, tol):
         max_col = max_idx % len(vec)
         assert max_col > max_row
         best_fit = vec[max_row:max_col+1].mean()
+        # print(vec[max_row:max_col+1])
         p_score = (max_col - max_row + 1) / len(vec)
 
     l1_score = np.abs(vec - best_fit).mean()
@@ -174,6 +177,7 @@ def _get_rot_rad(px, py):
         return -90 - rad
     return -rad
 
+# import matplotlib.pyplot as plt
 
 def get_rot_rad(init_coorx, coory, z=50, coorW=1024, coorH=512, floorW=1024, floorH=512, tol=5):
     gpid = get_gpid(init_coorx, coorW)
@@ -181,13 +185,26 @@ def get_rot_rad(init_coorx, coory, z=50, coorW=1024, coorH=512, floorW=1024, flo
     xy = np_coor2xy(coor, z, coorW, coorH, floorW, floorH)
     xy_cor = []
 
+    # plt.plot(xy[:,0], xy[:,1], "o")
+    # # print(_get_rot_rad(*pca.components_[0]))
+    # plt.xlim(min(xy[:,0])-20, max(xy[:,0])+20)
+    # plt.ylim(min(xy[:,1])-20, max(xy[:,1])+20)
+    # plt.show()
+
     rot_rad_suggestions = []
     for j in range(len(init_coorx)):
         pca = PCA(n_components=1)
         pca.fit(xy[gpid == j])
+        # plt.plot(xy[gpid == j][:,0], xy[gpid == j][:,1], ".")
+        # print(xy[gpid == j].shape)
+        # # print(_get_rot_rad(*pca.components_[0]))
+        # plt.xlim(min(xy[:,0])-20, max(xy[:,0])+20)
+        # plt.ylim(min(xy[:,1])-20, max(xy[:,1])+20)
+        # plt.show()
         rot_rad_suggestions.append(_get_rot_rad(*pca.components_[0]))
     rot_rad_suggestions = np.sort(rot_rad_suggestions + [1e9])
 
+    # print("rot_rad_suggestions :", rot_rad_suggestions[:-1])
     rot_rad = np.mean(rot_rad_suggestions[:-1])
     best_rot_rad_sz = -1
     last_j = 0
@@ -207,11 +224,20 @@ def gen_ww_cuboid(xy, gpid, tol):
     assert len(np.unique(gpid)) == 4
 
     # For each part seperated by wall-wall peak, voting for a wall
+    # print("gpid.shape :", gpid.shape)
+    # print("xy.shape :", xy.shape)
     for j in range(4):
         now_x = xy[gpid == j, 0]
         now_y = xy[gpid == j, 1]
+        # print("now_x.shape :", now_x.shape)
+        # print("now_y.shape :", now_y.shape)
+        # print()
         new_x, x_score, x_l1 = vote(now_x, tol)
         new_y, y_score, y_l1 = vote(now_y, tol)
+        # print("here")
+        # print((x_score, -x_l1))
+        # print((y_score, -y_l1))
+        # print()
         if (x_score, -x_l1) > (y_score, -y_l1):
             xy_cor.append({'type': 0, 'val': new_x, 'score': x_score})
         else:
@@ -335,9 +361,12 @@ def gen_ww_general(init_coorx, xy, gpid, tol):
 
 
 def gen_ww(init_coorx, coory, z=50, coorW=1024, coorH=512, floorW=1024, floorH=512, tol=3, force_cuboid=True):
+    # print("init_coorx :", init_coorx)
     gpid = get_gpid(init_coorx, coorW)
     coor = np.hstack([np.arange(coorW)[:, None], coory[:, None]])
     xy = np_coor2xy(coor, z, coorW, coorH, floorW, floorH)
+
+    # print("corner_coords :",xy[init_coorx])
 
     # Generate wall-wall
     if force_cuboid:

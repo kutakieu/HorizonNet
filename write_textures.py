@@ -224,6 +224,120 @@ def write_textures(all_rgb, texture_info, output_dir, camera_height):
 def write_point_cloud_files(pcd, file_name, output_dir):
     open3d.io.write_point_cloud(str(output_dir / (file_name + ".pcd")), pcd)
 
+def cal_normal_and_area(xyz_coords, vertex_ids):
+    xyz_coords = np.array(xyz_coords)
+    normal_vector = np.cross(xyz_coords[vertex_ids[1]] - xyz_coords[vertex_ids[0]], xyz_coords[vertex_ids[1]] - xyz_coords[vertex_ids[2]])
+    normal_vector /= np.sum(np.sqrt(normal_vector**2))
+
+    sigma = np.zeros(3)
+    for i in range(len(vertex_ids)):
+        vi = xyz_coords[vertex_ids[i]]
+        vj = xyz_coords[vertex_ids[(i+1) % len(vertex_ids)]]
+
+        sigma += np.cross(vi,vj) * normal_vector
+
+    return normal_vector.tolist(), (np.abs(np.sum(sigma))/2).item()
+
+
+def make_3D_json_file(cor_id, original_equirect_img, boundary, output_dir, camera_height=1.0, set_floor_0=True):
+
+    # cor_id = np.vstack((cor_id, np.array([0.5,cor_id[:, 1].mean()])))
+    # cor_id = np.vstack((cor_id, np.array([0.5,0.5])))
+    equirect_texture = original_equirect_img
+    H, W = equirect_texture.shape[:2]
+    cor_id[:, 0] *= W
+    cor_id[:, 1] *= H
+
+    # ceil_floor_mask = create_ceiling_floor_mask(cor_id, H, W)
+    # Convert cor_id to 3d xyz
+    N = len(cor_id) // 2
+    floor_z = -camera_height
+    # print(cor_id[1::2])
+    floor_xy = np_coor2xy(cor_id[1::2], floor_z, W, H, floorW=1, floorH=1)
+    c = np.sqrt((floor_xy**2).sum(1))
+    v = np_coory2v(cor_id[0::2, 1], H)
+    ceil_z = (c * np.tan(v)).mean().item()
+
+    cor_id[:, 0] /= W
+    cor_id[:, 1] /= H
+
+    # convert to list because numpy float32 cannot be seriarized by json
+    uv_coords = cor_id[0::2].tolist() + cor_id[1::2].tolist()
+    floor_xy = floor_xy.tolist()
+
+    # print(cor_id[1::2])
+    # print(floor_xy)
+    tmp = np_coor2xy(np.array([0.5*W, cor_id[:, 1].mean()*H]).reshape(1,2), floor_z, W, H, floorW=1, floorH=1)
+    # print(tmp)
+
+    data = {}
+
+    # data["xyz_coords"] = [[x, y, ceil_z] for x, y in floor_xy] + [[x, y, floor_z] for x, y in floor_xy]
+    data["xyz_coords"] = []
+    if set_floor_0:
+        xyz_coords = [[x, y, ceil_z+camera_height] for x, y in floor_xy] + [[x, y, floor_z+camera_height] for x, y in floor_xy]
+    else:
+        xyz_coords = [[x, y, ceil_z] for x, y in floor_xy] + [[x, y, floor_z] for x, y in floor_xy]
+    for x,y,z in xyz_coords:
+        data["xyz_coords"].append({"x":x, "y":y, "z":z})
+
+    # data["uv_coords"] = uv_coords
+    data["uv_coords"] = []
+    for u,v in uv_coords:
+        data["uv_coords"].append({"u":u, "v":v})
+
+    data["n_vertices"] = len(floor_xy)*2
+    data["n_walls"] = len(floor_xy)
+    data["room_height"] = ceil_z + camera_height
+    data["planes"] = []
+
+    # ceiling
+    l = [i for i in range(len(floor_xy))]
+    ceiling_plain = {
+                      "type":"ceiling",
+                      "vertex_ids":[i for i in range(len(floor_xy))],
+                      "uv_ids":[i for i in range(len(floor_xy))],
+                    }
+    normal_vector, area = cal_normal_and_area(xyz_coords, ceiling_plain["vertex_ids"])
+    # ceiling_plain["normal_vector"] = normal_vector
+    ceiling_plain["normal_vector"] = {"x":normal_vector[0], "y":normal_vector[1], "z":normal_vector[2]}
+    ceiling_plain["area"] = area
+    data["planes"].append(ceiling_plain)
+
+    # floor
+    floor_plain = {
+                    "type":"floor",
+                    "vertex_ids":[i for i in range(len(floor_xy), len(floor_xy)*2)],
+                    "uv_ids":[i for i in range(len(floor_xy), len(floor_xy)*2)],
+                  }
+    normal_vector, area = cal_normal_and_area(xyz_coords, floor_plain["vertex_ids"])
+    # floor_plain["normal_vector"] = normal_vector
+    floor_plain["normal_vector"] = {"x":normal_vector[0], "y":normal_vector[1], "z":normal_vector[2]}
+    floor_plain["area"] = area
+    data["planes"].append(floor_plain)
+
+    # each wall
+    for i in range(data["n_walls"]):
+        vc_i = ceiling_plain["vertex_ids"][i]
+        vc_j = ceiling_plain["vertex_ids"][(i+1) % data["n_walls"]]
+        cuurent_wall = {
+                        "type":"wall",
+                        "vertex_ids":[vc_i, vc_j, vc_j+data["n_walls"], vc_i+data["n_walls"]],
+                        "uv_ids":[vc_i, vc_j, vc_j+data["n_walls"], vc_i+data["n_walls"]],
+        }
+        normal_vector, area = cal_normal_and_area(xyz_coords, cuurent_wall["vertex_ids"])
+        # cuurent_wall["normal_vector"] = normal_vector
+        cuurent_wall["normal_vector"] = {"x":normal_vector[0], "y":normal_vector[1], "z":normal_vector[2]}
+        cuurent_wall["area"] = area
+        data["planes"].append(cuurent_wall)
+
+    # jsonified_data = json.dumps(data, indent=2)
+
+    with open(Path(output_dir) / "3D_data.json", "w") as f:
+        json.dump(data, f, indent=4)
+
+
+
 def make_3d_files(cor_id, original_equirect_img, output_dir, ppm=80, camera_height=1.6, ignore_wireframe=False, ignore_floor=False, ignore_ceiling=True, write_obj_files=True, write_point_cloud=True):
 
     # preprocessed_img = preprocess(original_equirect_img)
