@@ -239,7 +239,7 @@ def cal_normal_and_area(xyz_coords, vertex_ids):
     return normal_vector.tolist(), (np.abs(np.sum(sigma))/2).item()
 
 
-def make_3D_json_file(cor_id, original_equirect_img, boundary, output_dir, camera_height=1.0, set_floor_0=True):
+def make_3D_json_file(cor_id, original_equirect_img, boundary, output_dir, img_path, camera_height=1.0, set_floor_0=True):
 
     # cor_id = np.vstack((cor_id, np.array([0.5,cor_id[:, 1].mean()])))
     # cor_id = np.vstack((cor_id, np.array([0.5,0.5])))
@@ -271,6 +271,8 @@ def make_3D_json_file(cor_id, original_equirect_img, boundary, output_dir, camer
     # print(tmp)
 
     data = {}
+    data["panoramic_photo_filename"] = img_path.name
+    data["ProjectPanelID"] = int(img_path.stem.split("_")[1])
 
     # data["xyz_coords"] = [[x, y, ceil_z] for x, y in floor_xy] + [[x, y, floor_z] for x, y in floor_xy]
     data["xyz_coords"] = []
@@ -289,6 +291,7 @@ def make_3D_json_file(cor_id, original_equirect_img, boundary, output_dir, camer
     data["n_vertices"] = len(floor_xy)*2
     data["n_walls"] = len(floor_xy)
     data["room_height"] = ceil_z + camera_height
+    data["center_of_panorama_vector"] = {"x":0,"y":-1,"z":0}
     data["planes"] = []
 
     # ceiling
@@ -333,7 +336,7 @@ def make_3D_json_file(cor_id, original_equirect_img, boundary, output_dir, camer
 
     # jsonified_data = json.dumps(data, indent=2)
 
-    with open(Path(output_dir) / "3D_data.json", "w") as f:
+    with open(Path(output_dir) / (img_path.stem + ".json"), "w") as f:
         json.dump(data, f, indent=4)
 
 

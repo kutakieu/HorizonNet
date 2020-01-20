@@ -54,7 +54,10 @@ def main(args):
                 continue
 
             # output_dir = save_folder/img_path.stem
-            output_dir = img_dir
+            if args.output_dir is None:
+                output_dir = img_dir
+            else:
+                output_dir = args.output_dir
             # if not output_dir.exists():
             #     output_dir.mkdir(parents=True)
 
@@ -86,10 +89,10 @@ def main(args):
                      .resize((vw//2, vh//2), Image.LANCZOS)\
                      .save(vis_path)
 
-            make_3D_json_file(cor_id, np.array(img_orig)/255.0, boundary, output_dir, camera_height=1.0)
+            make_3D_json_file(cor_id, np.array(img_orig)/255.0, boundary, output_dir, img_path=img_path, camera_height=1.0)
 
             try:
-                make_3d_files(cor_id, np.array(img_orig)/255.0, output_dir, write_obj_files=True, write_point_cloud=True)
+                make_3d_files(cor_id, np.array(img_orig)/255.0, output_dir, write_obj_files=args.write_obj_files, write_point_cloud=args.write_point_cloud)
                 # make_3d_files(cor_id, vis_out/255.0, output_dir, write_obj_files=True, write_point_cloud=True)
             except:
                 print("error", img_path)
@@ -110,6 +113,9 @@ if __name__ == '__main__':
                              'All the given images are assumed to be aligned'
                              'or you should use preporcess.py to do so.')
     # parser.add_argument('--save_folder', required=True)
+    parser.add_argument('--write_obj_files', default=True)
+    parser.add_argument('--write_point_cloud', default=True)
+    parser.add_argument('--output_dir', help="path to a folder to save files", default=None)
     parser.add_argument('--visualize', default=True)
     # Augmentation related
     parser.add_argument('--flip', action='store_true',
