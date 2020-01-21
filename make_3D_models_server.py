@@ -110,9 +110,9 @@ if __name__ == '__main__':
     # parser.add_argument('--save_folder', required=True)
     parser.add_argument('--write_obj_files', action="store_true")
     parser.add_argument('--write_point_cloud', action="store_true")
-    parser.add_argument('--output_dir_json', help="path to a folder to save files", default="~/3d_reconstruction/json")
-    parser.add_argument('--output_dir_pcd', help="path to a folder to save files", default="~/3d_reconstruction/pcd")
-    parser.add_argument('--output_dir_line', help="path to a folder to save files", default="~/3d_reconstruction/line")
+    parser.add_argument('--output_dir_json', help="path to a folder to save files", default="./3d_reconstruction/json")
+    parser.add_argument('--output_dir_pcd', help="path to a folder to save files", default="./3d_reconstruction/pcd")
+    parser.add_argument('--output_dir_line', help="path to a folder to save files", default="./3d_reconstruction/line")
     parser.add_argument('--visualize', default=True)
     # Augmentation related
     parser.add_argument('--flip', action='store_true',
