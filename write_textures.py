@@ -341,7 +341,7 @@ def make_3D_json_file(cor_id, original_equirect_img, boundary, output_dir, img_p
 
 
 
-def make_3d_files(cor_id, original_equirect_img, output_dir, ppm=80, camera_height=1.6, ignore_wireframe=False, ignore_floor=False, ignore_ceiling=True, write_obj_files=True, write_point_cloud=True):
+def make_3d_files(cor_id, original_equirect_img, output_dir, img_path, ppm=80, camera_height=1.6, ignore_wireframe=False, ignore_floor=False, ignore_ceiling=True, write_obj_files=True, write_point_cloud=True):
 
     # preprocessed_img = preprocess(original_equirect_img)
     # print(preprocessed_img.shape)
@@ -401,6 +401,7 @@ def make_3d_files(cor_id, original_equirect_img, output_dir, ppm=80, camera_heig
     texture_info["ceiling"]["corner_xyz_coords"] = np.array([[x, y, ceil_z+camera_height] for x, y in floor_xy])
 
     if write_obj_files:
+        print("here")
         write_textures(all_rgb, texture_info, output_dir, camera_height)
 
     # Filter occluded points
@@ -414,7 +415,7 @@ def make_3d_files(cor_id, original_equirect_img, output_dir, ppm=80, camera_heig
     pcd.colors = open3d.Vector3dVector(all_rgb)
 
     if write_point_cloud:
-        write_point_cloud_files(pcd, str(output_dir.name), output_dir)
+        write_point_cloud_files(pcd, str(img_path.stem), output_dir)
 
 
 

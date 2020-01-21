@@ -72,7 +72,6 @@ def inference(net, x, device, flip=False, rotate=[], visualize=True,
     flip  : fliping testing augmentation
     rotate: horizontal rotation testing augmentation
     '''
-    print("force_cuboid :", force_cuboid)
 
     H, W = tuple(x.shape[2:])
 
