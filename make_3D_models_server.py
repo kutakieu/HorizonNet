@@ -48,51 +48,50 @@ def main(args):
     # print(img_file_paths)
     with torch.no_grad():
         for i, img_path in enumerate(img_files):
-            try:
-                print(img_path)
+        # try:
+            print(img_path)
 
-                if "panel" not in img_path.stem or "raw" in img_path.stem:
-                    continue
-
-                # try:
-                img_orig = preprocess(img_path)
-                # img_orig = Image.open(img_path)
-                # except:
-                #     continue
-                if img_orig.size != (1024, 512):
-                        img = img_orig.resize((1024, 512), Image.BICUBIC)
-                else:
-                    img = img_orig
-
-                img_ori = np.array(img)[..., :3].transpose([2, 0, 1]).copy()
-                x = torch.FloatTensor([img_ori / 255])
-
-                # Inferenceing corners
-                cor_id, z0, z1, vis_out, boundary = inference(net, x, device, args.flip, args.rotate, args.visualize, args.force_cuboid, args.min_v, args.r)
-
-                boundary = ((boundary / np.pi + 0.5) * 512).round().astype(int)
-                # print(boundary[0,511])
-                # print(boundary[1,511])
-
-                if vis_out is not None:
-                    vis_path = output_dir_line / (img_path.stem + '_raw.png')
-                    # print(vis_path)
-                    vh, vw = vis_out.shape[:2]
-                    Image.fromarray(vis_out)\
-                         .resize((vw//2, vh//2), Image.LANCZOS)\
-                         .save(vis_path)
-
-                make_3D_json_file(cor_id, np.array(img_orig)/255.0, boundary, output_dir_json, img_path=img_path, camera_height=1.0)
-
-                try:
-                    make_3d_files(cor_id, np.array(img_orig)/255.0, output_dir_pcd, img_path=img_path, write_obj_files=args.write_obj_files, write_point_cloud=args.write_point_cloud)
-                    # make_3d_files(cor_id, vis_out/255.0, output_dir, write_obj_files=True, write_point_cloud=True)
-                except:
-                    print("error", img_path)
-                    continue
-
-            except:
+            if "panel" not in img_path.stem or "raw" in img_path.stem:
                 continue
+
+            # try:
+            img_orig = preprocess(img_path)
+            # img_orig = Image.open(img_path)
+            # except:
+            #     continue
+            if img_orig.size != (1024, 512):
+                    img = img_orig.resize((1024, 512), Image.BICUBIC)
+            else:
+                img = img_orig
+
+            img_ori = np.array(img)[..., :3].transpose([2, 0, 1]).copy()
+            x = torch.FloatTensor([img_ori / 255])
+
+            # Inferenceing corners
+            cor_id, z0, z1, vis_out, boundary = inference(net, x, device, args.flip, args.rotate, args.visualize, args.force_cuboid, args.min_v, args.r)
+
+            boundary = ((boundary / np.pi + 0.5) * 512).round().astype(int)
+            # print(boundary[0,511])
+            # print(boundary[1,511])
+
+            if vis_out is not None:
+                vis_path = output_dir_line / (img_path.stem + '_raw.png')
+                # print(vis_path)
+                vh, vw = vis_out.shape[:2]
+                Image.fromarray(vis_out)\
+                     .resize((vw//2, vh//2), Image.LANCZOS)\
+                     .save(vis_path)
+
+            make_3D_json_file(cor_id, np.array(img_orig)/255.0, boundary, output_dir_json, img_path=img_path, camera_height=1.0)
+
+            # try:
+            make_3d_files(cor_id, np.array(img_orig)/255.0, output_dir_pcd, img_path=img_path, write_obj_files=args.write_obj_files, write_point_cloud=args.write_point_cloud)
+            #     except:
+            #         print("error", img_path)
+            #         continue
+            #
+            # except:
+            #     continue
 
             # input("...")
             # print(i)
