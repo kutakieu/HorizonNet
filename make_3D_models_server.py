@@ -93,6 +93,8 @@ def main(args):
                 #
             except:
                 print("error", img_path)
+                with open("./3d_reconstruction/log", "a") as f:
+                    f.write(img_path + "\n")
                 continue
 
             # input("...")
