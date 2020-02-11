@@ -19,6 +19,7 @@ import glob
 import argparse
 import numpy as np
 from PIL import Image
+from pathlib import Path
 
 from misc.pano_lsd_align import panoEdgeDetection, rotatePanorama
 
@@ -71,13 +72,17 @@ if __name__ == '__main__':
     parser.add_argument('--refine_iter', default=3, type=int)
     args = parser.parse_args()
 
-    paths = sorted(glob.glob(args.img_glob))
-    if len(paths) == 0:
-        print('no images found')
-
-    # Check given path exist
-    for path in paths:
-        assert os.path.isfile(path), '%s not found' % path
+    if  os.path.isdir(args.img_glob):
+        paths = sorted(glob.glob(args.img_glob))
+        if len(paths) == 0:
+            print('no images found')
+            exit()
+    elif os.path.isfile(args.img_glob):
+        paths = []
+        paths.append(args.img_glob)
+    else:
+        print('%s not found' % path)
+        exit()
 
     # Check target directory
     if not os.path.isdir(args.output_dir):

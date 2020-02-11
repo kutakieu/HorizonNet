@@ -103,7 +103,11 @@ def make_obj_file_horizontal(material_name, coordinates, normal_vector, save_fol
     fout_obj.write("mtllib " + material_name + ".mtl\n")
     fout_obj.write("o Plane\n")
 
-    fout_obj.write("v 0.0 0.0 0.0\n")
+    if "floor" in material_name:
+        fout_obj.write("v 0.0 0.0 0.0\n")
+    else:
+        fout_obj.write("v 0.0 {} 0.0\n".format(coordinates[0][2]))
+        
     for i, coordinate in enumerate(coordinates):
         fout_obj.write("v ")
         # for c in coordinate:
@@ -147,6 +151,6 @@ def make_obj_file_horizontal(material_name, coordinates, normal_vector, save_fol
         else:
             tmp2 = str(i+3) + "/" + str(i+3) + "/1"
 
-        fout_obj.write("f 1/1/1 " + tmp1  + " " + tmp2 + " 1/1/1\n")
+        fout_obj.write("f 1/1/1 " + tmp1  + " " + tmp2 + "\n")
 
     fout_obj.close()

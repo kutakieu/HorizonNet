@@ -200,8 +200,6 @@ def create_occlusion_mask(xyz, H, W):
 def write_textures(all_rgb, texture_info, output_dir, camera_height):
 
     for k,v in texture_info.items():
-        if k == "ceiling":
-            continue
 
         current_texture = all_rgb[v["start_idx"] : v["end_idx"]]
         # print(k, current_texture.shape)
@@ -211,6 +209,9 @@ def write_textures(all_rgb, texture_info, output_dir, camera_height):
 
         if k == "floor":
             normal_vector = "vn 0.0000 1.0000 0.0000\n"
+            make_obj_file_horizontal(k, v["corner_xyz_coords"], normal_vector, output_dir)
+        elif k == "ceiling":
+            normal_vector = "vn 0.0000 -1.0000 0.0000\n"
             make_obj_file_horizontal(k, v["corner_xyz_coords"], normal_vector, output_dir)
         elif "wall" in k:
             v["corner_xyz_coords"][:, 2] += camera_height
@@ -401,7 +402,6 @@ def make_3d_files(cor_id, original_equirect_img, output_dir, img_path, ppm=80, c
     texture_info["ceiling"]["corner_xyz_coords"] = np.array([[x, y, ceil_z+camera_height] for x, y in floor_xy])
 
     if write_obj_files:
-        print("here")
         write_textures(all_rgb, texture_info, output_dir, camera_height)
 
     # Filter occluded points
