@@ -56,6 +56,8 @@ for obj_file in obj_files:
     fout.write("#"*20 + "\n")
 
     for line in lines:
+        if line.split()[0] == "mtllib":
+            line = "mtllib {}.mtl\n".format(furniture_id)
         if line.split()[0] == "v":
             vals = line.split()
             line = "v {} {} {}\n".format(float(vals[1]) + slide_x, float(vals[3]) + slide_z, float(vals[2]) + slide_y)
