@@ -9,8 +9,8 @@ from inference import inference
 from misc import post_proc, panostretch, utils
 from model import HorizonNet
 from preprocess import preprocess
-from reconstruction.make_3D_model import Cuboid_Model
-from reconstruction.texture_maker import Texture
+# from reconstruction.make_3D_model import Cuboid_Model
+# from reconstruction.texture_maker import Texture
 
 from write_textures import make_3d_files, make_3D_json_file
 
@@ -40,7 +40,7 @@ def main(args):
     # print(img_file_paths)
     with torch.no_grad():
         for i, img_dir in enumerate(img_dirs):
-            print(img_dir)
+            # print(img_dir)
             # if str(img_dir.stem) != "panel_421865_洋室":
             #     continue
             # print("here")
@@ -52,6 +52,8 @@ def main(args):
 
             if img_path is None:
                 continue
+
+            print("start processing {}".format(img_path))
 
             # output_dir = save_folder/img_path.stem
             if args.output_dir is None:

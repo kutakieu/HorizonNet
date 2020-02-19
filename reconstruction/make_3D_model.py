@@ -1,6 +1,6 @@
 import math
 import numpy as np
-from .texture_maker import Texture
+# from .texture_maker import Texture
 
 class Cuboid_Model:
     def __init__(self, vertices_on_pano, original_img=None, camera_height=1.7):

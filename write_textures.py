@@ -208,17 +208,16 @@ def write_textures(all_rgb, texture_info, output_dir, camera_height):
         current_texture_img.save(output_dir / (k + ".jpg"), "JPEG")
 
         if k == "floor":
-            normal_vector = "vn 0.0000 1.0000 0.0000\n"
+            # normal_vector = "vn 0.0000 1.0000 0.0000\n"
+            normal_vector = "vn 0.0000 0.0000 1.0000\n"
             make_obj_file_horizontal(k, v["corner_xyz_coords"], normal_vector, output_dir)
         elif k == "ceiling":
-            normal_vector = "vn 0.0000 -1.0000 0.0000\n"
+            # normal_vector = "vn 0.0000 -1.0000 0.0000\n"
+            normal_vector = "vn 0.0000 0.0000 -1.0000\n"
             make_obj_file_horizontal(k, v["corner_xyz_coords"], normal_vector, output_dir)
         elif "wall" in k:
             v["corner_xyz_coords"][:, 2] += camera_height
-            normal_vector = np.cross(v["corner_xyz_coords"][1] - v["corner_xyz_coords"][0], v["corner_xyz_coords"][1] - v["corner_xyz_coords"][2])
-            normal_vector /= np.sum(np.sqrt(normal_vector**2))
-            normal_vec4obj_file = "vn " + str(normal_vector[0]) + " " + str(normal_vector[1]) + " " + str(normal_vector[2]) + "\n"
-            make_obj_file(k, v["corner_xyz_coords"], normal_vec4obj_file, output_dir)
+            make_obj_file(k, v["corner_xyz_coords"], output_dir)
         make_mtl_file(k, output_dir)
 
 
