@@ -1,5 +1,7 @@
 import bpy
+
 import sys
+import json
 import math
 import os
 from pathlib import Path
@@ -90,7 +92,8 @@ def render_panorama(obj_files_room, obj_files_furniture, output_dir_path):
     if bpy.app.version >= (2, 80, 0):
         bpy.ops.object.light_add(type='POINT', location=location, rotation=rotation)
     else:
-        bpy.ops.object.lamp_add(type='POINT', location=location, rotation=rotation)
+        # bpy.ops.object.lamp_add(type='POINT', location=location, rotation=rotation)
+        bpy.ops.object.lamp_add(type='SUN', location=location, rotation=rotation)
     light = bpy.context.object.data
     light.use_nodes = True
     light.node_tree.nodes["Emission"].inputs["Color"].default_value = (1.00, 0.90, 0.80, 1.00)
@@ -102,9 +105,9 @@ def render_panorama(obj_files_room, obj_files_furniture, output_dir_path):
     """renderer setting"""
     scene.camera = camera_object
     scene.render.image_settings.file_format = 'PNG'
-    scene.render.resolution_x = 2048//2
-    scene.render.resolution_y = 1024//2
-    scene.render.resolution_percentage = 50
+    scene.render.resolution_x = 1024
+    scene.render.resolution_y = 512
+    scene.render.resolution_percentage = 100
     scene.render.engine = 'CYCLES'
     scene.cycles.film_transparent = True
     scene.render.layers[0].cycles.use_denoising = True
@@ -118,12 +121,18 @@ def render_panorama(obj_files_room, obj_files_furniture, output_dir_path):
         current_furniture_parts = bpy.context.selected_objects[:]
         for current_furniture_part in current_furniture_parts:
             print(current_furniture_part.name)
-            current_furniture_part.data.materials[0] = mat_furniture
+            # current_furniture_part.data.materials[0] = mat_furniture
             current_furniture_part.layers[0] = True
             current_furniture_part.layers[1] = False
             for i in range(3):
                 current_furniture_part.location[i] = location_slide[i]
             current_furniture_part.rotation_euler[2] = rotation_angle
+
+    scene.render.filepath = str(output_dir_path / "img_{}_{}.png".format(obj_files_room[0].parent.stem, "".join([str(Path(obj_file).stem) for obj_file in obj_files_furniture])))
+    bpy.ops.render.render(animation=False, write_still=True)
+
+    light.type = "POINT"
+    light.node_tree.nodes["Emission"].inputs["Strength"].default_value = 1000
 
     """add render_layer for walls"""
     bpy.ops.scene.render_layer_add()
@@ -188,12 +197,15 @@ def render_panorama(obj_files_room, obj_files_furniture, output_dir_path):
         # bpy.ops.render.render(animation=False, write_still=True, layer="RenderLayer")
         # scene.render.filepath = str(output_dir_path / "img_{}_shadow.png".format(str(i)))
         # bpy.ops.render.render(animation=False, write_still=True, layer="RenderLayer.001")
-        scene.render.filepath = str(output_dir_path / "img_{}_shadow.png".format(str(i)))
+        scene.render.filepath = str(output_dir_path / "img_{}_{}_{}_shadow.png".format(str(i), file.stem, "".join([str(Path(obj_file).stem) for obj_file in obj_files_furniture])))
         bpy.ops.render.render(animation=False, write_still=True)
         for current_wall_part in current_wall_parts:
             bpy.data.objects.remove(current_wall_part)
 
 if __name__ == '__main__':
+    with open("/Users/taku-ueki/HorizonNet/data/Nitori_obj/furniture_id_name.json", "r") as f:
+        furniture_id2name = json.load(f)
+    print(furniture_id2name)
 
     output_dir_path = Path("rendered_result")
 
@@ -203,6 +215,11 @@ if __name__ == '__main__':
 
     # path_furniture_model = Path("/Users/taku-ueki/Desktop/furniture/")
     # obj_files_furniture = list(path_furniture_model.glob("*.obj"))
-    obj_files_furniture = ["/Users/taku-ueki/HorizonNet/data/Nitori_obj/シェルフ(TV台) 8010127_edit.obj"]
+    obj_files_furniture = ["/Users/taku-ueki/HorizonNet/data/Nitori_obj/{}.obj".format(furniture_id) for furniture_id in furniture_id2name]
 
-    render_panorama(obj_files_room, obj_files_furniture, output_dir_path)
+    print(obj_files_furniture)
+
+    # exit()
+    for obj_file_furniture in obj_files_furniture[3:]:
+        print(obj_file_furniture)
+        render_panorama(obj_files_room, [obj_file_furniture], output_dir_path)
