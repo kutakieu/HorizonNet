@@ -94,7 +94,7 @@ def main(args):
             make_3D_json_file(cor_id, np.array(img_orig)/255.0, boundary, output_dir, img_path=img_path, camera_height=1.0)
 
             try:
-                make_3d_files(cor_id, np.array(img_orig)/255.0, output_dir, img_path=img_path, ignore_ceiling=False, write_obj_files=args.write_obj_files, write_point_cloud=args.write_point_cloud)
+                make_3d_files(cor_id, np.array(img_orig)/255.0, output_dir, img_path=img_path, camera_height=1.2, ignore_ceiling=False, write_obj_files=args.write_obj_files, write_point_cloud=args.write_point_cloud)
                 # make_3d_files(cor_id, vis_out/255.0, output_dir, write_obj_files=True, write_point_cloud=True)
             except Exception as e:
                 print(e)
