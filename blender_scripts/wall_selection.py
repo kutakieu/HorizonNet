@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 import math
 
-def _cal_wall_width(obj_filepath):
+def _cal_wall_width(obj_filepath, room_scale_factor):
     fin = open(str(obj_filepath), "r", encoding="utf-8")
     lines = fin.readlines()
 
@@ -24,7 +24,7 @@ def _cal_wall_width(obj_filepath):
 
     wall_width = np.max([np.abs(coords[0,0] - coords[1,0]), np.abs(coords[0,1] - coords[1,1])])
 
-    return coords, wall_width, vn, "xyz"[vn_axis], vn_direnction
+    return coords, wall_width*room_scale_factor, vn, "xyz"[vn_axis], vn_direnction
 
 def _get_furniture_info(furniture_obj_filepath):
     """obj file parser"""
@@ -45,7 +45,7 @@ nv2corner_location_func = {
     (1,0): lambda wall_coords: [wall_coords[np.argmax(wall_coords[:, 1]), 0], max(wall_coords[:, 1])], # the wall is facing -x direction, return right top corner
 }
 
-def place_one_furniture(furniture_obj="./data/Nitori_obj/デスク 6200227_edit.obj", wall_objs_dir="./data/mid/panel_384478_洋室/"):
+def place_one_furniture(furniture_obj="./data/Nitori_obj/デスク 6200227_edit.obj", wall_objs_dir="./data/mid/panel_384478_洋室/", room_scale_factor=1.3):
 
     furniture_axis2width = _get_furniture_info(furniture_obj)
 
@@ -65,7 +65,7 @@ def place_one_furniture(furniture_obj="./data/Nitori_obj/デスク 6200227_edit.
 
     for wall_name, smoothness in wall2smoothness:
         current_wall_obj = wall_objs_dir / (wall_name+".obj")
-        wall_coords, wall_width, vn, vn_axis, vn_direnction = _cal_wall_width(current_wall_obj)
+        wall_coords, wall_width, vn, vn_axis, vn_direnction = _cal_wall_width(current_wall_obj, room_scale_factor)
 
         # check if the wall is wider than the width of the furniture
         if wall_width > furniture_axis2width["x"]:

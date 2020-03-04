@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 from blender_scripts.wall_selection import place_one_furniture
+from blender_scripts.home_staging import place_multi_furniture
 from blender_scripts.util import get_scale_factor
 
 """
@@ -34,7 +35,7 @@ def clean_nodes(nodes: bpy.types.Nodes):
 
 def render_panorama(room_model_dir, obj_files_furniture, pano_base_img_file, output_dir_path):
 
-    scale_factor_room = get_scale_factor(room_model_dir, target_room_height=2.4)
+    room_scale_factor = get_scale_factor(room_model_dir, target_room_height=2.4)
 
     obj_files_room = list(room_model_dir.glob("*.obj"))
 
@@ -54,7 +55,7 @@ def render_panorama(room_model_dir, obj_files_furniture, pano_base_img_file, out
 
     """camera setting"""
     if "Camera" not in bpy.data.objects:
-        bpy.ops.object.camera_add(location=(0, 0, 1.6), rotation=(math.pi/2,0,math.pi))
+        bpy.ops.object.camera_add(location=(0, 0, 1.0*room_scale_factor), rotation=(math.pi/2,0,math.pi))
         camera_object = bpy.context.object
         camera_object.data.lens = 5.0
         camera_object.data.type = "PANO"
@@ -125,7 +126,7 @@ def render_panorama(room_model_dir, obj_files_furniture, pano_base_img_file, out
 
         print(file_furniture)
         bpy.ops.import_scene.obj(filepath = str(file_furniture), axis_forward='Y', axis_up='Z')
-        location_slide, rotation_angle = place_one_furniture(file_furniture, path_room_model)
+        location_slide, rotation_angle = place_one_furniture(file_furniture, path_room_model, room_scale_factor)
         current_furniture_parts = bpy.context.selected_objects[:]
         for current_furniture_part in current_furniture_parts:
             print(current_furniture_part.name)
@@ -179,7 +180,7 @@ def render_panorama(room_model_dir, obj_files_furniture, pano_base_img_file, out
 
         current_wall_parts = bpy.context.selected_objects[:]
         for current_wall_part in current_wall_parts:
-            current_wall_part.scale *= scale_factor_room
+            current_wall_part.scale *= room_scale_factor
             current_wall_part.data.materials[0] = light_wall_material
             for i in range(20):
                 current_wall_part.layers[i] = True if i == 10 else False
@@ -204,7 +205,7 @@ def render_panorama(room_model_dir, obj_files_furniture, pano_base_img_file, out
         bpy.ops.import_scene.obj(filepath = str(file), axis_forward='Y', axis_up='Z')
         current_wall_parts = bpy.context.selected_objects[:]
         for current_wall_part in current_wall_parts:
-            current_wall_part.scale *= scale_factor_room
+            current_wall_part.scale *= room_scale_factor
             current_wall_part.data.materials[0] = shadow_catcher_wall_material
             current_wall_part.layers[0] = False
             current_wall_part.layers[10] = False
