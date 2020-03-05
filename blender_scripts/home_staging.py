@@ -24,19 +24,21 @@ def _cal_wall_width(obj_filepath, room_scale_factor):
 
     wall_width = np.max([np.abs(coords[0,0] - coords[1,0]), np.abs(coords[0,1] - coords[1,1])])
 
-    if vn_axis == 0 and vn_direnction == 1: coords[0],coords[1] = coords[np.argmin(coords[:,0])], coords[np.argmax(coords[:,0])]
-    elif vn_axis == 0 and vn_direnction == -1: coords[0],coords[1] = coords[np.argmax(coords[:,0])], coords[np.argmin(coords[:,0])]
-    elif vn_axis != 0 and vn_direnction == 1: coords[0],coords[1] = coords[np.argmin(coords[:,1])], coords[np.argmax(coords[:,1])]
-    elif vn_axis != 0 and vn_direnction == -1: coords[0],coords[1] = coords[np.argmax(coords[:,1])], coords[np.argmin(coords[:,1])]
 
-    return coords, wall_width*room_scale_factor, vn, "xyz"[vn_axis], vn_direnction
+    new_coords = np.zeros((2,2))
+    if vn_axis == 0 and vn_direnction == 1: new_coords[0],new_coords[1] = coords[np.argmax(coords[:,1])], coords[np.argmin(coords[:,1])] # wall facing +x
+    elif vn_axis == 0 and vn_direnction == -1: new_coords[0],new_coords[1] = coords[np.argmin(coords[:,1])], coords[np.argmax(coords[:,1])] # wall facing -x
+    elif vn_axis != 0 and vn_direnction == 1: new_coords[0],new_coords[1] = coords[np.argmin(coords[:,0])], coords[np.argmax(coords[:,0])] # wall facing +y
+    elif vn_axis != 0 and vn_direnction == -1: new_coords[0],new_coords[1] = coords[np.argmax(coords[:,0])], coords[np.argmin(coords[:,0])] # wall facing -y
+
+    return new_coords, wall_width*room_scale_factor, vn, "xyz"[vn_axis], vn_direnction
 
 def _get_furniture_info(furniture_obj_filepath):
     """obj file parser
         input: path to a furniture_obj file (furniture size is written before hand during the preprocess)
         output: axis2width: dict ex) {"x": 0.5 , "y": 0.5, "z":0.5}, volume: float
     """
-    with open(furniture_obj_filepath, "r", encoding="utf-8") as f:
+    with open(str(furniture_obj_filepath), "r", encoding="utf-8") as f:
         lines = f.readlines()
     axis2width = {}
     volume = 1
@@ -48,19 +50,13 @@ def _get_furniture_info(furniture_obj_filepath):
 
 
 nv2corner_location_func = {
-    (0,-1): lambda wall_coords: [max(wall_coords[:, 0]), wall_coords[np.argmax(wall_coords[:, 0]), 1]], # the wall is facing +y direction, return right bottom corner
-    (0,1): lambda wall_coords: [min(wall_coords[:, 0]), wall_coords[np.argmin(wall_coords[:, 0]), 1]], # the wall is facing -y direction, return left top corner
-    (-1,0): lambda wall_coords: [wall_coords[np.argmin(wall_coords[:, 1]), 0], min(wall_coords[:, 1])], # the wall is facing +x direction, return left bottom corner
-    (1,0): lambda wall_coords: [wall_coords[np.argmax(wall_coords[:, 1]), 0], max(wall_coords[:, 1])], # the wall is facing -x direction, return right top corner
-}
-nv2update_wall_coords = {
-    (0,-1): lambda wall_coords: [max(wall_coords[:, 0]), wall_coords[np.argmax(wall_coords[:, 0]), 1]], # the wall is facing +y direction, return right bottom corner
-    (0,1): lambda wall_coords: [min(wall_coords[:, 0]), wall_coords[np.argmin(wall_coords[:, 0]), 1]], # the wall is facing -y direction, return left top corner
-    (-1,0): lambda wall_coords: [wall_coords[np.argmin(wall_coords[:, 1]), 0], min(wall_coords[:, 1])], # the wall is facing +x direction, return left bottom corner
-    (1,0): lambda wall_coords: [wall_coords[np.argmax(wall_coords[:, 1]), 0], max(wall_coords[:, 1])], # the wall is facing -x direction, return right top corner
+    (0,1): lambda wall_coords: [min(wall_coords[:, 0])+0.1, wall_coords[np.argmin(wall_coords[:, 0]), 1]+0.1], # the wall is facing +y direction, return left bottom corner
+    (0,-1): lambda wall_coords: [max(wall_coords[:, 0])-0.1, wall_coords[np.argmax(wall_coords[:, 0]), 1]-0.1], # the wall is facing -y direction, return right top corner
+    (1,0): lambda wall_coords: [wall_coords[np.argmax(wall_coords[:, 1]), 0]+0.1, max(wall_coords[:, 1])-0.1], # the wall is facing +x direction, return right top corner
+    (-1,0): lambda wall_coords: [wall_coords[np.argmin(wall_coords[:, 1]), 0]-0.1, min(wall_coords[:, 1])+0.1], # the wall is facing -x direction, return left bottom corner
 }
 
-def place_multi_furniture(furniture_obj_dir="./data/basic_furniture/", wall_objs_dir="./data/mid/panel_384478_洋室/", room_scale_factor=1.3):
+def place_multi_furniture(furniture_obj_dir="./data/basic_furniture/", wall_objs_dir="./data/mid/panel_384478_洋室/", room_scale_factor=1):
 
     """compute each wall's smoothness"""
     if not isinstance(wall_objs_dir, pathlib.PosixPath):
@@ -80,6 +76,8 @@ def place_multi_furniture(furniture_obj_dir="./data/basic_furniture/", wall_objs
         current_wall_obj = wall_objs_dir / (wall_name+".obj")
         wall_coords, wall_width, vn, vn_axis, vn_direnction = _cal_wall_width(current_wall_obj, room_scale_factor)
         walls.append({"wall_name":wall_name, "smoothness":smoothness, "wall_coords":wall_coords, "wall_width":wall_width, "vn":vn, "vn_axis":vn_axis, "vn_direnction":vn_direnction})
+    for wall in walls:
+        print(wall)
 
     if not isinstance(furniture_obj_dir, pathlib.PosixPath):
         furniture_obj_dir = Path(furniture_obj_dir)
@@ -91,6 +89,17 @@ def place_multi_furniture(furniture_obj_dir="./data/basic_furniture/", wall_objs
 
     furniture_obj_file2transform_info = {}
     for furniture_obj, furniture_axis2width, volume in furniture_obj_volume:
+        print()
+        print(furniture_obj)
+        print(furniture_axis2width)
+
+
+        if furniture_axis2width["y"] < 0.05:
+            location_slide = np.zeros(3)
+            location_slide[0] = -furniture_axis2width["x"]/2
+            location_slide[1] = -furniture_axis2width["z"]/2
+            furniture_obj_file2transform_info[furniture_obj] = {"location":location_slide, "rotation":0}
+            continue
 
         for wall in walls:
             # check if the wall is wider than the width of the furniture
@@ -105,11 +114,16 @@ def place_multi_furniture(furniture_obj_dir="./data/basic_furniture/", wall_objs
                 location_slide = np.zeros(3)
                 location_slide[0] = corner[0]
                 location_slide[1] = corner[1]
-                wall["wall_width"] -= furniture_axis2width["x"]
-                if wall_vn_rounded_X==0 and wall_vn_rounded_Y==1: wall["wall_coords"][0] += furniture_axis2width["x"]
-                if wall_vn_rounded_X==0 and wall_vn_rounded_Y==-1: wall["wall_coords"][0] -= furniture_axis2width["x"]
-                if wall_vn_rounded_X==1 and wall_vn_rounded_Y==0: wall["wall_coords"][1] += furniture_axis2width["x"]
-                if wall_vn_rounded_X==-1 and wall_vn_rounded_Y==0: wall["wall_coords"][1] -= furniture_axis2width["x"]
+                print(wall["wall_width"])
+                wall["wall_width"] -= (furniture_axis2width["x"] + 0.1)
+
+                print(wall["wall_coords"])
+                if wall_vn_rounded_X==0 and wall_vn_rounded_Y==1: wall["wall_coords"][0,0] += (furniture_axis2width["x"] + 0.1)
+                elif wall_vn_rounded_X==0 and wall_vn_rounded_Y==-1: wall["wall_coords"][0,0] -= (furniture_axis2width["x"] + 0.1)
+                elif wall_vn_rounded_X==1 and wall_vn_rounded_Y==0: wall["wall_coords"][0,1] -= (furniture_axis2width["x"] + 0.1)
+                elif wall_vn_rounded_X==-1 and wall_vn_rounded_Y==0: wall["wall_coords"][0,1] += (furniture_axis2width["x"] + 0.1)
+                print(wall["wall_width"])
+                print(wall["wall_coords"])
 
                 # print(wall_coords)
                 # print(rotation_angle / 3.14 * 180)
@@ -117,6 +131,7 @@ def place_multi_furniture(furniture_obj_dir="./data/basic_furniture/", wall_objs
                 # print(current_wall_obj)
                 # return location_slide, rotation_angle
                 furniture_obj_file2transform_info[furniture_obj] = {"location":location_slide, "rotation":rotation_angle}
+                break
 
     return furniture_obj_file2transform_info
 
@@ -161,4 +176,6 @@ def place_one_furniture(furniture_obj="./data/Nitori_obj/デスク 6200227_edit.
     return None
 
 if __name__ == '__main__':
-    print(place_multi_furniture())
+    res = place_multi_furniture()
+    for k,v in res.items():
+        print(k,v)

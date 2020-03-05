@@ -7,7 +7,7 @@ def get_scale_factor(obj_dir, target_room_height=2.4):
 
     if not isinstance(obj_dir, pathlib.PosixPath):
         obj_dir = Path(obj_dir)
-    fin = open(obj_dir / "ceiling.obj", "r")
+    fin = open(str(obj_dir / "ceiling.obj"), "r")
     lines = fin.readlines()
     for i,line in enumerate(lines):
         if line.split()[0] == "v":
