@@ -63,11 +63,9 @@ def main(args):
             # if not output_dir.exists():
             #     output_dir.mkdir(parents=True)
 
-            # try:
             img_orig = preprocess(img_path)
-            # img_orig = Image.open(img_path)
-            # except:
-            #     continue
+            img_orig.resize((1024, 512)).save(img_path.parent / (img_path.stem + "_{}x{}.png".format(1024, 512)))
+
             if img_orig.size != (1024, 512):
                     img = img_orig.resize((1024, 512), Image.BICUBIC)
             else:
@@ -85,16 +83,18 @@ def main(args):
 
             if vis_out is not None:
                 vis_path = output_dir / (img_path.stem + '_raw.png')
-                # print(vis_path)
+
+                # add red line to highlight the coordinates
+                vis_out
                 vh, vw = vis_out.shape[:2]
                 Image.fromarray(vis_out)\
                      .resize((vw//2, vh//2), Image.LANCZOS)\
                      .save(vis_path)
 
-            make_3D_json_file(cor_id, np.array(img_orig)/255.0, boundary, output_dir, img_path=img_path, camera_height=1.0)
+            make_3D_json_file(cor_id, np.array(img_orig)/255.0, boundary, output_dir, img_path=img_path, camera_height=args.camera_height)
 
             try:
-                make_3d_files(cor_id, np.array(img_orig)/255.0, output_dir, img_path=img_path, camera_height=1.0, ignore_ceiling=False, write_obj_files=args.write_obj_files, write_point_cloud=args.write_point_cloud)
+                make_3d_files(cor_id, np.array(img_orig)/255.0, output_dir, img_path=img_path, camera_height=args.camera_height, ignore_ceiling=False, write_obj_files=args.write_obj_files, write_point_cloud=args.write_point_cloud)
                 # make_3d_files(cor_id, vis_out/255.0, output_dir, write_obj_files=True, write_point_cloud=True)
             except Exception as e:
                 print(e)
@@ -129,6 +129,7 @@ if __name__ == '__main__':
                              'each elements indicate fraction of image width. '
                              '# of input xlen(rotate).')
     # Post-processing realted
+    parser.add_argument('--camera_height', default=1.0, type=float)
     parser.add_argument('--r', default=0.05, type=float)
     parser.add_argument('--min_v', default=None, type=float)
     parser.add_argument('--force_cuboid', action='store_true')

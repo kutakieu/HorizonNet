@@ -5,11 +5,18 @@ import json
 import math
 import os
 from pathlib import Path
+import pathlib
 
-from blender_scripts.wall_selection import place_one_furniture
+# from blender_scripts.wall_selection import place_one_furniture
 from blender_scripts.home_staging import place_multi_furniture
 from blender_scripts.util import get_scale_factor
 
+from blender_scripts.blender_utils import *
+
+with open("./data/Nitori_obj/furniture_id_name.json", "r") as f:
+    furniture_id2name = json.load(f)
+print(furniture_id2name)
+# exit()
 """
 To run
 $ blender --background --python render_panorama_wFurniture.py
@@ -33,14 +40,26 @@ def clean_nodes(nodes: bpy.types.Nodes):
         nodes.remove(node)
 
 
-def render_panorama(room_model_dir, obj_files_furniture, pano_base_img_file, output_dir_path, furniture_obj_dir):
+def render_panorama(room_model_dir, furniture_obj_dir, output_dir_path, target_room_height=2.4):
 
-    room_scale_factor = get_scale_factor(room_model_dir, target_room_height=2.4)
+    bpy.ops.wm.read_homefile()
+
+    if not isinstance(room_model_dir, pathlib.PosixPath):
+        room_model_dir = Path(room_model_dir)
+    if not isinstance(furniture_obj_dir, pathlib.PosixPath):
+        furniture_obj_dir = Path(furniture_obj_dir)
+    if not isinstance(output_dir_path, pathlib.PosixPath):
+        output_dir_path = Path(output_dir_path)
+
+    """scale the room size to match the specified room height"""
+    room_scale_factor = get_scale_factor(room_model_dir, target_room_height=target_room_height)
 
     obj_files_room = list(room_model_dir.glob("*.obj"))
 
-    bpy.ops.image.open(filepath=str(pano_base_img_file))
-    pano_base_img = bpy.data.images[pano_base_img_file.name]
+    for img_file in list(room_model_dir.glob("*.jpg")) + list(room_model_dir.glob("*.png")):
+        if "1024x512" in img_file.stem:
+            bpy.ops.image.open(filepath=str(img_file))
+            pano_base_img = bpy.data.images[img_file.name]
 
     """scene setting"""
     scene = bpy.data.scenes["Scene"]
@@ -55,7 +74,7 @@ def render_panorama(room_model_dir, obj_files_furniture, pano_base_img_file, out
 
     """camera setting"""
     if "Camera" not in bpy.data.objects:
-        bpy.ops.object.camera_add(location=(0, 0, 1.2*room_scale_factor), rotation=(math.pi/2,0,math.pi))
+        bpy.ops.object.camera_add(location=(0, 0, 1.0*room_scale_factor), rotation=(math.pi/2,0,math.pi))
         camera_object = bpy.context.object
         camera_object.data.lens = 5.0
         camera_object.data.type = "PANO"
@@ -63,63 +82,14 @@ def render_panorama(room_model_dir, obj_files_furniture, pano_base_img_file, out
     else:
         camera_object = bpy.data.objects["Camera"]
 
+    scene.camera = camera_object
+
 
     """light setting - removed, using emmisison walls instead"""
-    # location = (0, 0, 3)
-    # rotation = (0, 0, 0)
-    # strength = 100.0
-    # if bpy.app.version >= (2, 80, 0):
-    #     bpy.ops.object.light_add(type='POINT', location=location, rotation=rotation)
-    # else:
-    #     # bpy.ops.object.lamp_add(type='POINT', location=location, rotation=rotation)
-    #     bpy.ops.object.lamp_add(type='SUN', location=location, rotation=rotation)
-    # light = bpy.context.object.data
-    # light.use_nodes = True
-    # light.node_tree.nodes["Emission"].inputs["Color"].default_value = (1.00, 0.90, 0.80, 1.00)
-    # if bpy.app.version >= (2, 80, 0):
-    #     light.energy = strength
-    # else:
-    #     light.node_tree.nodes["Emission"].inputs["Strength"].default_value = strength
-    # light.type = "POINT"
-    # light.node_tree.nodes["Emission"].inputs["Strength"].default_value = 1000
-
+    # light_setting()
 
     """renderer setting"""
-    scene.camera = camera_object
-    scene.render.image_settings.file_format = 'PNG'
-    scene.render.resolution_x = 1024
-    scene.render.resolution_y = 512
-    scene.render.resolution_percentage = 100
-    scene.render.engine = 'CYCLES'
-    scene.cycles.film_transparent = True
-    scene.render.layers[0].cycles.use_denoising = True
-    scene.cycles.sample_clamp_indirect = 0.5
-
-    """furniture_models_material"""
-    mat_furniture = bpy.data.materials.new("mat_furniture")
-    mat_furniture.use_nodes = True
-    nodes_furniture = mat_furniture.node_tree.nodes
-    links_furniture = mat_furniture.node_tree.links
-
-    clean_nodes(nodes_furniture)
-    OutputMaterial_node_furniture = nodes_furniture.new(type='ShaderNodeOutputMaterial')
-
-    MixShader_node_furniture = nodes_furniture.new(type='ShaderNodeMixShader')
-    MixShader_node_furniture.inputs[0].default_value = 0.082
-
-    BsdfDiffuse_node_furniture = nodes_furniture.new(type='ShaderNodeBsdfDiffuse')
-    BsdfDiffuse_node_furniture.inputs[0].default_value = (40/255, 40/255, 40/255, 1.00)
-    BsdfDiffuse_node_furniture.inputs[1].default_value = 0.0
-
-    BsdfGlossy_node_furniture = nodes_furniture.new(type='ShaderNodeBsdfGlossy')
-    BsdfGlossy_node_furniture.distribution = "GGX"
-    BsdfGlossy_node_furniture.inputs[0].default_value = (1.00, 1.0, 1.0, 1.00)
-    BsdfGlossy_node_furniture.inputs[1].default_value = 0.133
-
-    links_furniture.new(MixShader_node_furniture.outputs['Shader'], OutputMaterial_node_furniture.inputs['Surface'])
-    links_furniture.new(BsdfDiffuse_node_furniture.outputs['BSDF'], MixShader_node_furniture.inputs[1])
-    links_furniture.new(BsdfGlossy_node_furniture.outputs['BSDF'], MixShader_node_furniture.inputs[2])
-
+    render_setting(scene)
 
     """load furniture models here"""
     furniture_obj_file2transform_info = place_multi_furniture(furniture_obj_dir, room_model_dir, room_scale_factor)
@@ -131,7 +101,6 @@ def render_panorama(room_model_dir, obj_files_furniture, pano_base_img_file, out
         current_furniture_parts = bpy.context.selected_objects[:]
         for current_furniture_part in current_furniture_parts:
             print(current_furniture_part.name)
-            # current_furniture_part.data.materials[0] = mat_furniture
             current_furniture_part.layers[0] = True
             current_furniture_part.layers[1] = False
             for i in range(3):
@@ -210,10 +179,10 @@ def render_panorama(room_model_dir, obj_files_furniture, pano_base_img_file, out
     shadow_catcher_wall_material_links.new(Geometry_node_room.outputs['True Normal'], BsdfDiffuse_node_room.inputs['Normal'])
 
     """add walls as shadow catcher"""
-    for i,file in enumerate(obj_files_room):
+    for i, obj_file_room in enumerate(obj_files_room):
         """load room wall obj file"""
-        print(file)
-        bpy.ops.import_scene.obj(filepath = str(file), axis_forward='Y', axis_up='Z')
+        print(obj_file_room)
+        bpy.ops.import_scene.obj(filepath = str(obj_file_room), axis_forward='Y', axis_up='Z')
         current_wall_parts = bpy.context.selected_objects[:]
         for current_wall_part in current_wall_parts:
             current_wall_part.scale *= room_scale_factor
@@ -223,9 +192,6 @@ def render_panorama(room_model_dir, obj_files_furniture, pano_base_img_file, out
             current_wall_part.layers[1] = True
             current_wall_part.cycles.is_shadow_catcher = True
             current_wall_part.cycles_visibility.camera = True
-
-        # exit()
-        # input("...")
 
     """composite"""
     # switch on nodes and get reference
@@ -268,39 +234,27 @@ def render_panorama(room_model_dir, obj_files_furniture, pano_base_img_file, out
     composite_node_links.new(AlphaOver_node_shadow_pano.outputs["Image"], Composite_node.inputs[0])
 
     """render"""
-    # scene.render.filepath = str(output_dir_path / "img_{}_object.png".format(str(i)))
+    # scene.render.filepath = str(output_dir_path / "img_{}_object.png".format("RenderLayer"))
     # bpy.ops.render.render(animation=False, write_still=True, layer="RenderLayer")
-    # scene.render.filepath = str(output_dir_path / "img_{}_shadow.png".format(str(i)))
+    # scene.render.filepath = str(output_dir_path / "img_{}_shadow.png".format("RenderLayer.001"))
     # bpy.ops.render.render(animation=False, write_still=True, layer="RenderLayer.001")
-    scene.render.filepath = str(output_dir_path / "img_{}_{}_{}_shadow.png".format(str(i), file.stem, "".join([str(Path(obj_file).stem) for obj_file in obj_files_furniture])))
+
+    furniture_names4filename = "".join(map(lambda x: "_" + furniture_id2name[x.stem].split()[0] ,list(furniture_obj_dir.glob("*.obj"))))
+    scene.render.filepath = str(output_dir_path / "{}_{}.png".format(room_model_dir.stem, furniture_names4filename))
     bpy.ops.render.render(animation=False, write_still=True)
     for current_wall_part in current_wall_parts:
         bpy.data.objects.remove(current_wall_part)
 
 if __name__ == '__main__':
-    with open("/Users/taku-ueki/HorizonNet/data/Nitori_obj/furniture_id_name.json", "r") as f:
-        furniture_id2name = json.load(f)
-    # print(furniture_id2name)
-
     output_dir_path = Path("rendered_result")
 
-    """read obj files"""
-    room_model_dir = Path("/Users/taku-ueki/HorizonNet/data/mid/panel_384478_洋室/")
-    # room_model_dir = Path("/Users/taku-ueki/HorizonNet/data/easy/panel_246489_和室1/")
-    obj_files_room = list(room_model_dir.glob("*.obj"))
+    """test one room model"""
+    # room_model_dir = Path("/Users/taku-ueki/HorizonNet/data/proper_room_test/panel_513061_洋室1/")
+    # render_panorama(room_model_dir, furniture_obj_dir="./data/basic_furniture/", output_dir_path=output_dir_path)
+    # exit()
 
-    # path_furniture_model = Path("/Users/taku-ueki/Desktop/furniture/")
-    # obj_files_furniture = list(path_furniture_model.glob("*.obj"))
-    obj_files_furniture = ["/Users/taku-ueki/HorizonNet/data/Nitori_obj/{}.obj".format(furniture_id) for furniture_id in furniture_id2name]
-    # print(obj_files_furniture)
-
-    pano_base_img_file = Path("/Users/taku-ueki/HorizonNet/data/mid/panel_384478_洋室/pano_2014x512.png")
-
-    """test place_multi_furniture"""
-    render_panorama(room_model_dir, [], pano_base_img_file, output_dir_path, furniture_obj_dir="./data/basic_furniture/")
-    exit()
-
-    # for obj_file_furniture in obj_files_furniture:
-    for obj_file_furniture in ["/Users/taku-ueki/HorizonNet/data/Nitori_obj/8010127.obj"]:
-        print(obj_file_furniture)
-        render_panorama(room_model_dir, [obj_file_furniture], pano_base_img_file, output_dir_path)
+    """run for multiple room models"""
+    room_model_dirs = Path("/Users/taku-ueki/HorizonNet/data/proper_room_test/").glob("*")
+    for room_model_dir in room_model_dirs:
+        if room_model_dir.is_dir():
+            render_panorama(room_model_dir, furniture_obj_dir="./data/basic_furniture/", output_dir_path=output_dir_path)

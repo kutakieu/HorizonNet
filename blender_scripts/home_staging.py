@@ -4,58 +4,6 @@ import cv2
 import numpy as np
 import math
 
-def _cal_wall_width(obj_filepath, room_scale_factor):
-    fin = open(str(obj_filepath), "r", encoding="utf-8")
-    lines = fin.readlines()
-
-    coords = np.zeros((2,2))
-    i = 0
-    for line in lines:
-        if len(line.split()) == 0:
-            continue
-        if i <= 1 and line.split()[0] == "v" and float(line.split()[3]) == 0: # refer only coordinates on the floor
-            coords[i,:] = np.array([float(line.split()[1]), float(line.split()[2])])
-            i += 1
-
-        if line.split()[0] == "vn":
-            vn = np.array([float(vn) for vn in line.split()[1:]])
-            vn_axis = np.argmin(1.0 - np.abs(vn))
-            vn_direnction = 1.0 if vn[vn_axis] > 0 else -1.0
-
-    wall_width = np.max([np.abs(coords[0,0] - coords[1,0]), np.abs(coords[0,1] - coords[1,1])])
-
-
-    new_coords = np.zeros((2,2))
-    if vn_axis == 0 and vn_direnction == 1: new_coords[0],new_coords[1] = coords[np.argmax(coords[:,1])], coords[np.argmin(coords[:,1])] # wall facing +x
-    elif vn_axis == 0 and vn_direnction == -1: new_coords[0],new_coords[1] = coords[np.argmin(coords[:,1])], coords[np.argmax(coords[:,1])] # wall facing -x
-    elif vn_axis != 0 and vn_direnction == 1: new_coords[0],new_coords[1] = coords[np.argmin(coords[:,0])], coords[np.argmax(coords[:,0])] # wall facing +y
-    elif vn_axis != 0 and vn_direnction == -1: new_coords[0],new_coords[1] = coords[np.argmax(coords[:,0])], coords[np.argmin(coords[:,0])] # wall facing -y
-
-    return new_coords, wall_width*room_scale_factor, vn, "xyz"[vn_axis], vn_direnction
-
-def _get_furniture_info(furniture_obj_filepath):
-    """obj file parser
-        input: path to a furniture_obj file (furniture size is written before hand during the preprocess)
-        output: axis2width: dict ex) {"x": 0.5 , "y": 0.5, "z":0.5}, volume: float
-    """
-    with open(str(furniture_obj_filepath), "r", encoding="utf-8") as f:
-        lines = f.readlines()
-    axis2width = {}
-    volume = 1
-    for line in lines:
-        if line.split()[0] == "###":
-            axis2width[line.split()[2]] = float(line.split()[3])
-            volume *= float(line.split()[3])
-    return axis2width, volume
-
-
-nv2corner_location_func = {
-    (0,1): lambda wall_coords: [min(wall_coords[:, 0])+0.1, wall_coords[np.argmin(wall_coords[:, 0]), 1]+0.1], # the wall is facing +y direction, return left bottom corner
-    (0,-1): lambda wall_coords: [max(wall_coords[:, 0])-0.1, wall_coords[np.argmax(wall_coords[:, 0]), 1]-0.1], # the wall is facing -y direction, return right top corner
-    (1,0): lambda wall_coords: [wall_coords[np.argmax(wall_coords[:, 1]), 0]+0.1, max(wall_coords[:, 1])-0.1], # the wall is facing +x direction, return right top corner
-    (-1,0): lambda wall_coords: [wall_coords[np.argmin(wall_coords[:, 1]), 0]-0.1, min(wall_coords[:, 1])+0.1], # the wall is facing -x direction, return left bottom corner
-}
-
 def place_multi_furniture(furniture_obj_dir="./data/basic_furniture/", wall_objs_dir="./data/mid/panel_384478_洋室/", room_scale_factor=1):
 
     """compute each wall's smoothness"""
@@ -134,6 +82,60 @@ def place_multi_furniture(furniture_obj_dir="./data/basic_furniture/", wall_objs
                 break
 
     return furniture_obj_file2transform_info
+
+def _cal_wall_width(obj_filepath, room_scale_factor):
+    fin = open(str(obj_filepath), "r", encoding="utf-8")
+    lines = fin.readlines()
+
+    coords = np.zeros((2,2))
+    i = 0
+    for line in lines:
+        if len(line.split()) == 0:
+            continue
+        if i <= 1 and line.split()[0] == "v" and float(line.split()[3]) == 0: # refer only coordinates on the floor
+            coords[i,:] = np.array([float(line.split()[1]), float(line.split()[2])])
+            i += 1
+
+        if line.split()[0] == "vn":
+            vn = np.array([float(vn) for vn in line.split()[1:]])
+            vn_axis = np.argmin(1.0 - np.abs(vn))
+            vn_direnction = 1.0 if vn[vn_axis] > 0 else -1.0
+
+    wall_width = np.max([np.abs(coords[0,0] - coords[1,0]), np.abs(coords[0,1] - coords[1,1])])
+
+
+    new_coords = np.zeros((2,2))
+    if vn_axis == 0 and vn_direnction == 1: new_coords[0],new_coords[1] = coords[np.argmax(coords[:,1])], coords[np.argmin(coords[:,1])] # wall facing +x
+    elif vn_axis == 0 and vn_direnction == -1: new_coords[0],new_coords[1] = coords[np.argmin(coords[:,1])], coords[np.argmax(coords[:,1])] # wall facing -x
+    elif vn_axis != 0 and vn_direnction == 1: new_coords[0],new_coords[1] = coords[np.argmin(coords[:,0])], coords[np.argmax(coords[:,0])] # wall facing +y
+    elif vn_axis != 0 and vn_direnction == -1: new_coords[0],new_coords[1] = coords[np.argmax(coords[:,0])], coords[np.argmin(coords[:,0])] # wall facing -y
+
+    return new_coords*room_scale_factor, wall_width*room_scale_factor, vn, "xyz"[vn_axis], vn_direnction
+
+def _get_furniture_info(furniture_obj_filepath):
+    """obj file parser
+        input: path to a furniture_obj file (furniture size is written before hand during the preprocess)
+        output: axis2width: dict ex) {"x": 0.5 , "y": 0.5, "z":0.5}, volume: float
+    """
+    with open(str(furniture_obj_filepath), "r", encoding="utf-8") as f:
+        lines = f.readlines()
+    axis2width = {}
+    volume = 1
+    for line in lines:
+        if line.split()[0] == "###":
+            axis2width[line.split()[2]] = float(line.split()[3])
+            volume *= float(line.split()[3])
+    return axis2width, volume
+
+
+nv2corner_location_func = {
+    (0,1): lambda wall_coords: [min(wall_coords[:, 0])+0.1, wall_coords[np.argmin(wall_coords[:, 0]), 1]+0.1], # the wall is facing +y direction, return left bottom corner
+    (0,-1): lambda wall_coords: [max(wall_coords[:, 0])-0.1, wall_coords[np.argmax(wall_coords[:, 0]), 1]-0.1], # the wall is facing -y direction, return right top corner
+    (1,0): lambda wall_coords: [wall_coords[np.argmax(wall_coords[:, 1]), 0]+0.1, max(wall_coords[:, 1])-0.1], # the wall is facing +x direction, return right top corner
+    (-1,0): lambda wall_coords: [wall_coords[np.argmin(wall_coords[:, 1]), 0]-0.1, min(wall_coords[:, 1])+0.1], # the wall is facing -x direction, return left bottom corner
+}
+
+
 
 
 def place_one_furniture(furniture_obj="./data/Nitori_obj/デスク 6200227_edit.obj", wall_objs_dir="./data/mid/panel_384478_洋室/", room_scale_factor=1.3):
