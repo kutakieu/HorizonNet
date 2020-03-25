@@ -1,10 +1,119 @@
-from pathlib import Path
-import pathlib
+from shapely.geometry import Point, Polygon, LineString
 import cv2
 import numpy as np
-import math
+from scipy import signal
 
-from util import _get_furniture_info
+from pathlib import Path
+import pathlib
+import math
+import copy
+
+from blender_scripts.util import _get_furniture_info
+
+def place_multi_furniture_scoring(furniture_obj_dir="./data/basic_furniture/", wall_objs_dir="./data/mid/panel_384478_洋室/", room_scale_factor=1):
+    if not isinstance(wall_objs_dir, pathlib.PosixPath):
+        wall_objs_dir = Path(wall_objs_dir)
+    coords, min_x, max_x, min_y, max_y = _parse_obj(wall_objs_dir / "floor.obj")
+
+    poly = Polygon(coords)
+
+    inside_outside_map = np.full((max_y-min_y+1, max_x-min_x+1), -np.inf)
+    print(inside_outside_map.shape)
+    for r in range(min_y, max_y):
+        for c in range(min_x, max_x):
+            if Point(c, r).within(poly):
+                inside_outside_map[r - min_y, c - min_x] = 255
+
+    image_files = list(Path("/Users/taku-ueki/HorizonNet/data/mid/panel_384478_洋室/").glob("wall_*.jpg"))
+    # wall2smoothness = {}
+    wall2smoothness_coords = {}
+    edge_level_all = 0
+    for image_file in image_files:
+        if "wall" in str(image_file):
+            ima = cv2.imread(str(image_file))
+            gray_img = cv2.cvtColor(ima, cv2.COLOR_BGR2GRAY)
+            edge_level = cv2.Laplacian(gray_img, cv2.CV_64F).var()
+            edge_level_all += edge_level
+            
+            line = _parse_obj_wall(image_file.parent / (image_file.stem + ".obj"))
+            
+            wall2smoothness_coords[image_file.stem] = {"edge_level": edge_level, "line": line}
+        
+    for k,v in wall2smoothness_coords.items():
+        v["edge_level"] /= edge_level_all
+
+
+    score_map = np.full((max_y-min_y+1, max_x-min_x+1), -np.inf)
+    scores = []
+    for r in range(min_y, max_y):
+        for c in range(min_x, max_x):
+            current_point = Point(c, r)
+    #         if current_point.within(poly):
+            if inside_outside_map[r - min_y, c - min_x] > 0:
+                score = 0
+                for wall_name, smoothness_coords in wall2smoothness_coords.items():
+                    smoothness = 1- smoothness_coords["edge_level"]
+                    line = smoothness_coords["line"]
+    #                 score += smoothness * (1/current_point.distance(line))
+                    score += (1/1+current_point.distance(line))*smoothness
+                scores.append(score)
+                score_map[r - min_y, c - min_x] = score
+            else:
+                scores.append(0)
+
+    score_map = score_map / score_map.max()
+
+
+    if not isinstance(furniture_obj_dir, pathlib.PosixPath):
+        furniture_obj_dir = Path(furniture_obj_dir)
+    furniture_objs = list(furniture_obj_dir.glob("*.obj"))
+    """sort the furniture objs by its size"""
+    furniture_obj_volume = [[furniture_obj] + list(_get_furniture_info(furniture_obj)) for furniture_obj in furniture_objs]
+    furniture_obj_volume.sort(key=lambda x:x[-1], reverse=True)
+
+    furniture_obj2position = {}
+    score_map_history = [copy.deepcopy(score_map)]
+        
+    for i, (furniture_obj, furniture_axis2width, volume) in enumerate(furniture_obj_volume):
+        # if the furniture is too big, ignore it.
+        if (furniture_axis2width["x"]*100 > score_map.shape[0] and furniture_axis2width["x"]*100 > score_map.shape[1]) or (furniture_axis2width["z"]*100 > score_map.shape[0] and furniture_axis2width["z"]*100 > score_map.shape[1]):
+            continue
+        print(furniture_obj)
+
+        # place furniture horizontally
+        kernel1 = np.ones((int(100*furniture_axis2width["x"]), int(100*furniture_axis2width["z"])))
+        kernel_size = kernel1.sum()
+        try:
+            convolved_res1 = signal.convolve2d(score_map, kernel1, boundary='symm', mode='valid')/kernel_size
+        except:
+            convolved_res1 = None
+        
+        # place furniture vertically
+        kernel2 = np.ones((int(100*furniture_axis2width["z"]), int(100*furniture_axis2width["x"])))
+        try:
+            convolved_res2 = signal.convolve2d(score_map, kernel2, boundary='symm', mode='valid')/kernel_size
+        except:
+            convolved_res2 = None
+
+        if convolved_res2 is None or convolved_res1.max() > convolved_res2.max():
+            convolved_res = convolved_res1
+            kernel_shape = (int(100*furniture_axis2width["x"]), int(100*furniture_axis2width["z"]))
+        else:
+            convolved_res = convolved_res2
+            kernel_shape = (int(100*furniture_axis2width["z"]), int(100*furniture_axis2width["x"]))
+
+        best_row_topLeft, best_col_topLeft = np.unravel_index(np.argmax(convolved_res), convolved_res.shape)
+        best_row_center = best_row_topLeft + kernel_shape[0]//2
+        best_col_center = best_col_topLeft + kernel_shape[1]//2
+        score_map[best_row_topLeft:best_row_topLeft+kernel_shape[0], best_col_topLeft:best_col_topLeft+kernel_shape[1]] = -np.inf
+
+        score_map_history.append(copy.deepcopy(score_map))
+
+        furniture_obj2position[furniture_obj] = (best_row_topLeft, best_col_topLeft)
+    
+    return furniture_obj2position, score_map_history
+
+
 
 def place_multi_furniture(furniture_obj_dir="./data/basic_furniture/", wall_objs_dir="./data/mid/panel_384478_洋室/", room_scale_factor=1):
 
@@ -138,51 +247,53 @@ nv2corner_location_func = {
 }
 
 
-def place_multi_furniture_scoring(furniture_obj_dir="./data/basic_furniture/", wall_objs_dir="./data/mid/panel_384478_洋室/", room_scale_factor=1):
+def _parse_obj(file_path = "/Users/taku-ueki/HorizonNet/data/mid/panel_384478_洋室/floor.obj"):
+    with open(file_path, "r") as f:
+        lines = f.readlines()
+        
+    min_x = math.inf
+    min_y = math.inf
+    max_x = -math.inf
+    max_y = -math.inf
+    
+    coords = []
+    for line in lines:
+        tokens = line.split()
+        try:
+            if tokens[0] == "v":
+#                 print(tokens)
+                x = int(float(tokens[1]) * 100)
+                y = int(float(tokens[2]) * 100)
+                if x != 0 and y!= 0:
+                    coords.append((x,y))
+                    if x > max_x: max_x = x
+                    elif x < min_x: min_x = x
+                    if y > max_y: max_y = y
+                    elif y < min_y: min_y = y  
+        except:
+            continue
+    return coords, min_x, max_x, min_y, max_y
 
-
-
-
-def place_one_furniture(furniture_obj="./data/Nitori_obj/デスク 6200227_edit.obj", wall_objs_dir="./data/mid/panel_384478_洋室/", room_scale_factor=1.3):
-
-    furniture_axis2width, volume = _get_furniture_info(furniture_obj)
-
-    if not isinstance(wall_objs_dir, pathlib.PosixPath):
-        wall_objs_dir = Path(wall_objs_dir)
-    image_files = list(wall_objs_dir.glob("*.jpg"))
-    # print(image_files)
-
-    wall2smoothness = {}
-    for image_file in image_files:
-        if "wall" in str(image_file):
-            ima = cv2.imread(str(image_file))
-            gray_img = cv2.cvtColor(ima, cv2.COLOR_BGR2GRAY)
-            wall2smoothness[image_file.stem] = cv2.Laplacian(gray_img, cv2.CV_64F).var()
-
-    wall2smoothness = sorted(wall2smoothness.items(), key=lambda x: x[1])
-
-    for wall_name, smoothness in wall2smoothness:
-        current_wall_obj = wall_objs_dir / (wall_name+".obj")
-        wall_coords, wall_width, vn, vn_axis, vn_direnction = _cal_wall_width(current_wall_obj, room_scale_factor)
-
-        # check if the wall is wider than the width of the furniture
-        if wall_width > furniture_axis2width["x"]:
-            wall_width_margin = wall_width - furniture_axis2width["x"]
-            rotation_angle = np.arctan2(vn[1], vn[0]) - np.arctan2(1, 0)
-            # print((int(vn[0]+math.copysign(0.5,vn[0])), int(vn[1]+math.copysign(0.5,vn[1]))))
-            corner = nv2corner_location_func[(int(vn[0]+math.copysign(0.5,vn[0])), int(vn[1]+math.copysign(0.5,vn[1])))](wall_coords)
-            location_slide = np.zeros(3)
-            location_slide[0] = corner[0]
-            location_slide[1] = corner[1]
-            print(wall_coords)
-            print(rotation_angle / 3.14 * 180)
-            print(corner)
-            print(current_wall_obj)
-            return location_slide, rotation_angle
-
-    return None
-
-if __name__ == '__main__':
-    res = place_multi_furniture()
-    for k,v in res.items():
-        print(k,v)
+def _parse_obj_wall(file_path):
+    with open(file_path, "r") as f:
+        lines = f.readlines()
+        
+    x1,y1 = None, None
+    x2,y2 = None, None
+        
+    for line in lines:
+        tokens = line.split()
+        if tokens[0] == "v":
+            x = int(float(tokens[1]) * 100)
+            y = int(float(tokens[2]) * 100)
+#             print(x,y)
+            if x1 is None:
+                x1 = x
+                y1 = y
+            elif x1 != x or y1 != y:
+                x2 = x
+                y2 = y
+                break
+    print("x1:{}, y1:{},   x2:{}, y2:{}".format(x1,y1,x2,y2))
+            
+    return LineString([(x1,y1), (x2,y2)])
